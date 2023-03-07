@@ -258,8 +258,22 @@ mod tests {
         assert_eq!(four, expected_four);
         assert_eq!(Fp::TWO_INV*two, Fp::ONE);
         assert_eq!(two.pow(two), four);
+        assert_eq!(two.square(), four);
 
         let two_inv = two.invert().unwrap();
         assert_eq!(two_inv, Fp::TWO_INV);
+    }
+
+    #[test]
+    fn check_params() {
+        assert_eq!(Fp::ROOT_OF_UNITY*Fp::ROOT_OF_UNITY_INV, Fp::ONE);
+        assert_eq!(Fp::MULTIPLICATIVE_GENERATOR.pow(Fp(MODULUS)-Fp::ONE), Fp::ONE);
+        
+        let two = Fp::from(2u64);
+        let two_pow_s = two.pow(Fp::from(Fp::S as u64));
+        assert_eq!(Fp::ROOT_OF_UNITY.pow(two_pow_s), Fp::ONE);
+
+        let t = (Fp(MODULUS)-Fp::ONE) * (two_pow_s.invert().unwrap());
+        assert_eq!(Fp::DELTA.pow(t), Fp::ONE);
     }
 }
