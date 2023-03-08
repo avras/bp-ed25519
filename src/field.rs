@@ -172,7 +172,7 @@ impl Field for Fp {
     fn random(mut rng: impl RngCore) -> Self {
         let mut bytes = [0; 32];
         rng.fill_bytes(&mut bytes);
-        Self(U256::from_le_bytes(bytes))
+        Self(U256::from_le_bytes(bytes).checked_rem(&MODULUS).unwrap())
     }
 
     fn square(&self) -> Self {
@@ -276,4 +276,88 @@ mod tests {
         let t = (Fp(MODULUS)-Fp::ONE) * (two_pow_s.invert().unwrap());
         assert_eq!(Fp::DELTA.pow(t), Fp::ONE);
     }
+
+    #[test]
+    fn check_add_sub() {
+        let mut rng = rand::thread_rng();
+        let mut x = Fp::random(&mut rng);
+        let y = Fp::random(&mut rng);
+        let neg_y = -y;
+        assert_eq!(y+neg_y, Fp::ZERO);
+        assert_eq!(x+neg_y, x-y);
+
+        let old_x = x;
+        x -= y;
+        assert_eq!(x + y, old_x);
+        x += y;
+        assert_eq!(x, old_x);
+    
+        let a = [x, Fp::from(1u64), Fp::from(2u64), y];
+        assert_eq!(Fp::sum(a.iter()), x+y+Fp::from(3u64));
+    
+        let y_ref = &y;
+        assert_eq!(x+y, x+y_ref);
+        x += y_ref;
+        assert_eq!(x-y, x-y_ref);
+        x -= y_ref;
+        assert_eq!(x+y, x+y_ref);
+    }
+
+    #[test]
+    fn check_mul() {
+        let mut rng = rand::thread_rng();
+        let mut x = Fp::random(&mut rng);
+        let y = Fp::random(&mut rng);
+        assert_eq!(x.invert().unwrap()*x, Fp::ONE);
+
+        let old_x = x;
+        x *= y;
+        assert_eq!(x*y.invert().unwrap(), old_x);
+
+        let a = [x, Fp::from(2u64), Fp::from(3u64), y];
+        assert_eq!(Fp::product(a.iter()), x*y*Fp::from(6u64));
+
+        let y_ref = &y;
+        assert_eq!(x*y, x*y_ref);
+        x *= y_ref;
+        assert_eq!(x*y.invert().unwrap(), x*y_ref.invert().unwrap());
+    }
+
+    #[test]
+    fn check_repr() {
+        let mut rng = rand::thread_rng();
+        let x = Fp::random(&mut rng);
+        let repr = x.to_repr();
+        let roundtrip_x = Fp::from_repr(repr).unwrap();
+
+        assert_eq!(x, roundtrip_x);
+    }
+    
+    #[test]
+    fn check_square_double() {
+        let mut rng = rand::thread_rng();
+        let x = Fp::random(&mut rng);
+        assert_eq!(x.square(), x*x);
+        assert_eq!(x.double(), x+x);
+        let two = Fp::from(2u64);
+        assert_eq!(x.double(), x*two);
+    }
+
+    #[test]
+    fn check_cteq() {
+        let two = Fp::from(2u64);
+        let two_alt = Fp::ONE + Fp::ONE;
+        assert_eq!(two.ct_eq(&two_alt).unwrap_u8(), 1u8);
+    }
+
+    #[test]
+    fn check_conditonal_select() {
+        let one = Fp::ONE;
+        let two = Fp::from(2u64);
+        let x = Fp::conditional_select(&one, &two, Choice::from(0u8));
+        let y = Fp::conditional_select(&one, &two, Choice::from(1u8));
+        assert_eq!(x, one);
+        assert_eq!(y, two);
+    }
+
 }
