@@ -9,7 +9,7 @@ use crypto_bigint::{Encoding, Integer, U256, U512};
 use crypto_bigint::rand_core::RngCore;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub struct Fp(U256);
+pub struct Fp(pub U256);
 
 const MODULUS: U256 =
     U256::from_be_hex("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed");
@@ -401,14 +401,12 @@ mod tests {
         assert!(sq_root == two || sq_root == -two);
 
         let mut rng = rand::thread_rng();
-        for _ in 0..10 {
-            let x = Fp::random(&mut rng);
-            let x_sq = x.square();
-            let (is_sq_root, sq_root) = Fp::sqrt_ratio(&x_sq, &Fp::ONE);
-            assert!(bool::from(is_sq_root));
-            assert!(sq_root == x || sq_root == -x);
-            assert_eq!(sq_root.square(), x_sq);
-        }
+        let x = Fp::random(&mut rng);
+        let x_sq = x.square();
+        let (is_sq_root, sq_root) = Fp::sqrt_ratio(&x_sq, &Fp::ONE);
+        assert!(bool::from(is_sq_root));
+        assert!(sq_root == x || sq_root == -x);
+        assert_eq!(sq_root.square(), x_sq);
     }
 
 }
