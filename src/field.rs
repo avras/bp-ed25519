@@ -19,6 +19,12 @@ const WIDE_MODULUS: U512 = U512::from_be_hex(concat!(
     "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
 ));
 
+const SQRT_MINUS_ONE: Fp =
+    Fp(U256::from_be_hex
+    ("2b8324804fc1df0b2b4d00993dfbd7a72f431806ad2fe478c4ee1b274a0ea0b0"));
+
+pub const FIELD_MODULUS: Fp = Fp(MODULUS);
+
 fn reduce(x: U512) -> U256 {
     U256::from_le_slice(&x.checked_rem(&WIDE_MODULUS).unwrap().to_le_bytes()[.. 32])
 }
@@ -188,8 +194,32 @@ impl Field for Fp {
         CtOption::new(self.pow(NEG_2), !self.is_zero())
     }
 
-    fn sqrt_ratio(_num: &Self, _div: &Self) -> (Choice, Self) {
-        unimplemented!()
+    // https://www.rfc-editor.org/rfc/rfc8032#section-5.1.3
+    fn sqrt_ratio(u: &Self, v: &Self) -> (Choice, Self) {
+        let v_sq = v.square();
+        let uv = (*u)*(*v);
+        let uv3 = uv * v_sq;
+
+        let v_pow4 = v_sq.square();
+        let v_pow6 = v_pow4 * v_sq;
+        let uv7 = uv * v_pow6;
+
+        let five = Fp::from(5u64);
+        let one_by_eight = Fp::from(8u64).invert().unwrap();
+        let exponent = (FIELD_MODULUS - five)*one_by_eight;
+        let beta = uv3 * uv7.pow(exponent); // candidate square root
+        
+        let beta_sq = beta.square();
+        let is_sq_root = (*v * beta_sq - *u).is_zero() | (*v * beta_sq + *u).is_zero();
+
+        let neg_not_required = (*v * beta_sq - *u).is_zero();
+        let sq_root = if neg_not_required.unwrap_u8() == 1u8 {
+            beta
+        }
+        else {
+            beta*SQRT_MINUS_ONE
+        };
+        (is_sq_root, sq_root)
     }
 }
 
@@ -359,5 +389,27 @@ mod tests {
         assert_eq!(x, one);
         assert_eq!(y, two);
     }
+
+    #[test]
+    fn check_square_root() {
+        let two = Fp::from(2u64);
+        assert_eq!(two.sqrt().is_none().unwrap_u8(), 1u8);
+
+        let four = two.square();
+        let (is_sq_root, sq_root) = Fp::sqrt_ratio(&four, &Fp::ONE);
+        assert_eq!(is_sq_root.unwrap_u8(), 1u8);
+        assert!(sq_root == two || sq_root == -two);
+
+        let mut rng = rand::thread_rng();
+        for _ in 0..10 {
+            let x = Fp::random(&mut rng);
+            let x_sq = x.square();
+            let (is_sq_root, sq_root) = Fp::sqrt_ratio(&x_sq, &Fp::ONE);
+            assert_eq!(is_sq_root.unwrap_u8(), 1u8);
+            assert!(sq_root == x || sq_root == -x);
+            assert_eq!(sq_root.square(), x_sq);
+        }
+    }
+
 
 }
