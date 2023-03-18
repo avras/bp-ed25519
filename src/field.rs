@@ -213,7 +213,7 @@ impl Field for Fp {
         let is_sq_root = (*v * beta_sq - *u).is_zero() | (*v * beta_sq + *u).is_zero();
 
         let neg_not_required = (*v * beta_sq - *u).is_zero();
-        let sq_root = if neg_not_required.unwrap_u8() == 1u8 {
+        let sq_root = if bool::from(neg_not_required) {
             beta
         }
         else {
@@ -377,7 +377,7 @@ mod tests {
     fn check_cteq() {
         let two = Fp::from(2u64);
         let two_alt = Fp::ONE + Fp::ONE;
-        assert_eq!(two.ct_eq(&two_alt).unwrap_u8(), 1u8);
+        assert!(bool::from(two.ct_eq(&two_alt)));
     }
 
     #[test]
@@ -393,11 +393,11 @@ mod tests {
     #[test]
     fn check_square_root() {
         let two = Fp::from(2u64);
-        assert_eq!(two.sqrt().is_none().unwrap_u8(), 1u8);
+        assert!(bool::from(two.sqrt().is_none()));
 
         let four = two.square();
         let (is_sq_root, sq_root) = Fp::sqrt_ratio(&four, &Fp::ONE);
-        assert_eq!(is_sq_root.unwrap_u8(), 1u8);
+        assert!(bool::from(is_sq_root));
         assert!(sq_root == two || sq_root == -two);
 
         let mut rng = rand::thread_rng();
@@ -405,11 +405,10 @@ mod tests {
             let x = Fp::random(&mut rng);
             let x_sq = x.square();
             let (is_sq_root, sq_root) = Fp::sqrt_ratio(&x_sq, &Fp::ONE);
-            assert_eq!(is_sq_root.unwrap_u8(), 1u8);
+            assert!(bool::from(is_sq_root));
             assert!(sq_root == x || sq_root == -x);
             assert_eq!(sq_root.square(), x_sq);
         }
     }
-
 
 }
