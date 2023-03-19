@@ -1,0 +1,240 @@
+\documentclass[a4paper, 12pt]{article}
+\usepackage[margin=0.5in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{hyperref}
+
+\title{Ed25519 Circuits}
+\author{Saravanan Vijayakumaran}
+
+\begin{document}
+\maketitle
+
+\section{Ed25519 Elliptic Curve Equations}%
+\label{sec:curve_equations}
+Let $q$ be the prime $2^{255}-19$. The ed25519 curve is given by the set
+\begin{align}
+  E = \left\{ (x,y) \in \mathbb{F}_q \times \mathbb{F}_q \mid -x^2+y^2=1+dx^2y^2 \right\},
+  \label{eqn:curve}
+\end{align}
+where $d = -\frac{121665}{121666}$. The addition law is given by
+\begin{align}
+  (x_3, y_3) = (x_1, y_1) + (x_2, y_2) = \left( \frac{x_1y_2+x_2y_1}{1+dx_1x_2y_1y_2}, \frac{y_1y_2 + x_1x_2}{1-dx_1x_2y_1y_2}  \right).
+  \label{eqn:addition}
+\end{align}
+The identity element is the point $(0,1)$. The above addition law works even when the points being added are identical, i.e.~$(x_1, y_1) = (x_2, y_2)$. So we do not require a different addition rule for point doubling.
+
+\section{Verifying Point Addition}%
+\label{sec:verifying_point_addition}
+In the context of SNARKs, we are concerned with verifying that three points $P, Q, R \in E$ satisfy $R= P+Q$ using an arithmetic circuit. The main challenge is the representation of the arithmetic over $\mathbb{F}_q$ using field elements from a different finite field $\mathbb{F}_r$. The field $\mathbb{F}_r$ is called the \textit{native field} and the arithmetic over $\mathbb{F}_q$ is called \textit{non-native arithmetic}.
+
+A few popular choices for the native field have $r$ equal to a 254-bit prime. The \textit{capacity} of such fields is then 253 bits, i.e.~they can represent any integer in the range $\{0,1,\ldots,2^{253}-1\}$. In this document, we exclusively focus on this case.
+
+An element of $\mathbb{F}_q$ requires 255 bits and hence cannot be expressed a single element of $\mathbb{F}_r$. While two elements of $\mathbb{F}_r$ suffice to represent an element of $\mathbb{F}_q$, we will use more than two to allow the representations of products of $\mathbb{F}_q$ elements.
+
+Suppose we use four elements of $\mathbb{F}_r$ to represent an element of $\mathbb{F}_q$. Let $a \in \mathbb{F}_q$ and $a_0, a_1, a_2, a_3 \in \mathbb{F}_r$ such that
+\begin{align*}
+  a = \sum^{3}_{i=0} a_i 2^{64i}.
+\end{align*}
+In the \textit{reduced representation} of $a$, the $a_i$'s are in the range  $\{0,1,2,\ldots,2^{64}-1\}$. The elements $a_i$ are called the \textit{limbs} of $a$.
+
+Arithmetic operations can lead to \textit{unreduced representations}. Let $a=\sum_{i=0}^{3} a_i 2^{64i}, b=\sum_{i=0}^{3} b_i 2^{64i}$ for $a_i, b_i \in \mathbb{F}_{r} \cap \{0,1,\ldots,2^{64}-1\}$. The product of $a$ and $b$ is given by
+\begin{align*}
+  ab = \sum^{6}_{k=0} c_k 2^{64k}  \ \ \ \ \ \ \text{ where } c_k = \underset{i+j=k}{\sum_{i=0}^3 \sum_{j=0}^3} a_i b_j.
+\end{align*}
+Each product $a_ib_j$ occupies 128 bits and the sum $c_k$ can occupy a maximum of $128 + 2 = 130$ bits. As $\mathbb{F}_r$ has a capacity of 253 bits, we can represent the product $ab$ using seven $\mathbb{F}_r$ elements $c_0,c_1,\ldots,c_6$. This would be an unreduced representation of the product.
+
+It may be possible to work with unreduced representations and delay reducing them to obtain smaller arithmetic circuits.\footnote{The \texttt{circom-ecdsa} project uses this approach. \url{https://github.com/0xPARC/circom-ecdsa}} But we should be careful to avoid overflow in the limbs. For example, the unreduced representation of $\mathbb{F}_q$ elements using $\mathbb{F}_r$ limbs encounters overflow in a degree 4 product, i.e.~an expression of the form $x_1 x_2 x_3 x_4$ where each $x_i \in \mathbb{F}_q$. Each term of such a product will require at least 256 bits.
+
+To verify that points $(x_1, y_1), (x_2, y_2), (x_3, y_3)$ satisfy the addition law in (\ref{eqn:addition}), we could check that
+\begin{align*}
+  x_3(1+dx_1x_2y_1y_2) &= x_1y_2 + x_2y_1,\\
+  y_3(1-dx_1x_2y_1y_2) &= x_1x_2 + y_1y_2.
+\end{align*}
+The above equations involve degree 6 products. These equations use affine coordinates.
+
+Using projective coordinates\footnote{\url{https://hyperelliptic.org/EFD/g1p/auto-twisted-projective.html}}, the point addition formula is given by
+\begin{align*}
+  C   & = X_1X_2,\\
+  D   & = Y_1Y_2,\\
+  E   & = dCD,\\
+  X_3  & = (1-E)((X_1+Y_1)(X_2+Y_2)-C-D),\\
+  Y_3  & = (1+E)(D+C),\\
+  Z_3  & = 1-E^2.
+\end{align*}
+These also involve a degree 6 product (in $Z_3$) and several degree 5 products.
+
+Using extended coordinates\footnote{\url{https://hyperelliptic.org/EFD/g1p/auto-twisted-extended-1.html}}, the point addition formula is given by
+\begin{align*}
+  A & = (Y_1-X_1)(Y_2-X_2),\\
+  B & = (Y_1+X_1)(Y_2+X_2),\\
+  C & = kT_1T_2,\\
+  D & = 2Z_1Z_2,\\
+  E & = B-A,\\
+  F & = D-C,\\
+  G & = D+C,\\
+  H & = B+A,\\
+  X_3 & = EF,\\
+  Y_3 & = GH,\\
+  T_3 & = EH,\\
+  Z_3 & = FG,
+\end{align*}
+where $k=2d$. These also involve a degree 6 product (in $Z_3$) and several degree 5 products. The inverted coordinates also involve degree 6 products.\footnote{\url{https://hyperelliptic.org/EFD/g1p/auto-twisted-inverted.html}}
+
+There does not seem any way to reduce the degree of the products in the point addition verification equations to 3 without resorting to intermediate reductions. So we cannot use 64-bit $\mathbb{F}_r$ limbs to represent $\mathbb{F}_q$ elements \textit{if we want to restrict ourselves to a single unreduced to reduced representation conversion}.
+
+The maximum limb bitwidth such that a product of six limbs fits in 253 bits is 42, as $6\times 42 = 252$. But this will not accommodate carries.
+
+In general, the product between $a = \sum_{i=0}^{k_a-1}a_i 2^{\eta i}$ and $b= \sum_{i=0}^{k_b-1}b_i 2^{\eta i}$ will have $k_a+k_b-1$ limbs each having a maximum bitwidth of $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ where the $a_i$'s have bitwidth $m_a$ and the $b_i$'s have bitwidth $m_b$.
+
+We would need 7 limbs each having bitwidth equal to 42 to represent an $\mathbb{F}_q$ element (as $6\times 42 = 252 < 255 < 294 = 7\times 42$). Setting $k_a=k_b =7$ shows that even a degree 2 product will require 3 bits to accomodate carries. A degree 6 product of $\mathbb{F}_q$ elements represented using 42-bit limbs from $\mathbb{F}_r$ will have overflow in its unreduced representation.
+
+Let us now consider the case of 41-bit limbs. We again need 7 limbs to represent an $\mathbb{F}_q$ element as $255 < 287 = 7\times 41$. A degree 6 product of 7-limbed terms with 41 bits per limb will need 268 bits to products and carries in the unreduced representation. The calculations are illustrated in Table \ref{tab:limb41}.
+\begin{table}[h]
+  \centering
+  \begin{tabular}{c|c|c|c|c|c|c}
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $z_1$ & $z_2$ & 41 & 41 & 7 & 7 & 85 \\ \hline
+    $z_1z_2$ & $z_3$ & 85 & 41 & 13 & 7 & 130 \\ \hline
+    $z_1z_2z_3$ & $z_4$ & 130 & 41 & 19 & 7 & 176 \\ \hline
+    $z_1z_2z_3z_4$ & $z_5$ & 176 & 41 & 25 & 7 & 222 \\ \hline
+    $z_1z_2z_3z_4z_5$ & $z_6$ & 222 & 41 & 31 & 7 & 268 \\ \hline
+  \end{tabular}
+  \caption{Bitwidth growth for products of terms with 7 limbs of 41 bits each}
+  \label{tab:limb41}
+\end{table}
+
+A degree 6 product of 7-limbed terms with 40 bits per limb will need 262 bits to products and carries in the unreduced representation. The calculations are illustrated in Table \ref{tab:limb40}.
+\begin{table}[h]
+  \centering
+  \begin{tabular}{c|c|c|c|c|c|c}
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $z_1$ & $z_2$ & 40 & 40 & 7 & 7 & 83 \\ \hline
+    $z_1z_2$ & $z_3$ & 83 & 40 & 13 & 7 & 127 \\ \hline
+    $z_1z_2z_3$ & $z_4$ & 127 & 40 & 19 & 7 & 172 \\ \hline
+    $z_1z_2z_3z_4$ & $z_5$ & 172 & 40 & 25 & 7 & 217 \\ \hline
+    $z_1z_2z_3z_4z_5$ & $z_6$ & 217 & 40 & 31 & 7 & 262 \\ \hline
+  \end{tabular}
+  \caption{Bitwidth growth for products of terms with 7 limbs of 40 bits each}
+  \label{tab:limb40}
+\end{table}
+
+A degree 6 product of 7-limbed terms with 39 bits per limb will need 256 bits to products and carries in the unreduced representation. The calculations are illustrated in Table \ref{tab:limb39}.
+\begin{table}[h]
+  \centering
+  \begin{tabular}{c|c|c|c|c|c|c}
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $z_1$ & $z_2$ & 39 & 39 & 7 & 7 & 81 \\ \hline
+    $z_1z_2$ & $z_3$ & 81 & 39 & 13 & 7 & 124 \\ \hline
+    $z_1z_2z_3$ & $z_4$ & 124 & 39 & 19 & 7 & 168 \\ \hline
+    $z_1z_2z_3z_4$ & $z_5$ & 168 & 39 & 25 & 7 & 212 \\ \hline
+    $z_1z_2z_3z_4z_5$ & $z_6$ & 212 & 39 & 31 & 7 & 256 \\ \hline
+  \end{tabular}
+  \caption{Bitwidth growth for products of terms with 7 limbs of 39 bits each}
+  \label{tab:limb39}
+\end{table}
+
+A degree 6 product of 7-limbed terms with 38 bits per limb will need 261 bits to products and carries in the unreduced representation. The calculations are illustrated in Table \ref{tab:limb38}.
+\begin{table}[h]
+  \centering
+  \begin{tabular}{c|c|c|c|c|c|c}
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $z_1$ & $z_2$ & 38 & 38 & 7 & 7 & 79 \\ \hline
+    $z_1z_2$ & $z_3$ & 79 & 38 & 13 & 7 & 121 \\ \hline
+    $z_1z_2z_3$ & $z_4$ & 121 & 38 & 19 & 7 & 164 \\ \hline
+    $z_1z_2z_3z_4$ & $z_5$ & 164 & 38 & 25 & 7 & 207 \\ \hline
+    $z_1z_2z_3z_4z_5$ & $z_6$ & 207 & 38 & 31 & 7 & 250 \\ \hline
+  \end{tabular}
+  \caption{Bitwidth growth for products of terms with 7 limbs of 38 bits each}
+  \label{tab:limb38}
+\end{table}
+
+While it is possible to use 38-bit limbs to safely calculate the unreduced representation of a degree 6 product, the circuit logic can be quite complex. It seems prudent to try a simpler approach first, even if it inefficient in terms of arithmetic circuit size.
+
+\newpage
+\subsection{An Approach using Four 64-bit Limbs}%
+\label{subsec:an_approach_using_four_64_bit_limbs}
+Unreduced representations of cubic products using four 64-bit limbs can be safely calculated in fields with capacity 253 bits. The bitwidth growth of this case is illustrated in Table \ref{tab:limb64}.
+\begin{table}[h]
+  \centering
+  \begin{tabular}{c|c|c|c|c|c|c}
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $z_1$ & $z_2$ & 64 & 64 & 4 & 4 & 130 \\ \hline
+    $z_1z_2$ & $z_3$ & 130 & 64 & 7 & 4 & 197 \\ \hline
+  \end{tabular}
+  \caption{Bitwidth growth for products of terms with 7 limbs of 38 bits each}
+  \label{tab:limb64}
+\end{table}
+
+Recall that the affine point addition verification equations can be written as
+\begin{align*}
+  x_3(1+dx_1x_2y_1y_2) &= x_1y_2 + x_2y_1,\\
+  y_3(1-dx_1x_2y_1y_2) &= x_1x_2 + y_1y_2.
+  \label{eqn:additionAffineVerification}
+\end{align*}
+We propose to try the following approach. It is inspired by the \texttt{circom-ecdsa} approach for verifying secp256k1 point addition.
+\begin{itemize}
+  \item Calculate the reduced representation of the cubic $dx_1x_2$. Let this representation be given by $u = \sum_{i=0}^{3}u_i 2^{64i}$.
+  \item Calculate the reduced representation of the cubic $uy_1y_2$. Let this representation be given by $v = \sum_{i=0}^{3}v_i 2^{64i}$. Note that $v$ corresponds to the reduced representation of $dx_1x_2y_1y_2$.
+  \item Check that the following quadratic equations hold.
+    \begin{align*}
+      x_3 + x_3 v - x_1y_2 - x_2y_1 = 0,\\
+      y_3 - y_3 v - x_1x_2 - y_1y_2 = 0.\\
+    \end{align*}
+\end{itemize}
+
+\section{Reducing a Cubic Product}%
+\label{sec:reducing_a_cubic_product}
+Let $a,b,c$ be three elements in $\mathbb{F}_q$ available in their reduced representations.
+\begin{align*}
+  a = \sum^{3}_{i=0} a_i 2^{64i}, \ \ \ \ b = \sum^{3}_{i=0} b_i 2^{64i}, \ \ \ \ c = \sum^{3}_{i=0} c_i 2^{64i}.
+\end{align*}
+Let $f = ab$. Then we have $f = \sum_{i=0}^{6} f_i 2^{64i}$ where
+\begin{align*}
+  f_0 & = a_0b_0,\\
+  f_1 & = a_0b_1 + a_1b_0,\\
+  f_2 & = a_0b_2 + a_1b_1 + a_2b_0,\\
+  f_3 & = a_0b_3 + a_1b_2 + a_2b_1 + a_3b_0,\\
+  f_4 & = a_1b_3 + a_2b_2 + a_3b_1,\\
+  f_5 & = a_2b_3 + a_3b_2,\\
+  f_6 & = a_3b_3.
+\end{align*}
+The limb $f_3$ occupies a maximum of 130 bits and the other limbs occupy 128 or 129 bits.
+
+Let $g = fc$. Then we have $g = \sum_{i=0}^{9} g_i 2^{64i}$ where
+\begin{align*}
+  g_0 & = f_0c_0,\\
+  g_1 & = f_0c_1 + f_1c_0,\\
+  g_2 & = f_0c_2 + f_1c_1 + f_2c_0,\\
+  g_3 & = f_0c_3 + f_1c_2 + f_2c_1 + f_3c_0,\\
+  g_4 & = f_1c_3 + f_2c_2 + f_3c_1 + f_4c_0,\\
+  g_5 & = f_2c_3 + f_3c_2 + f_4c_1 + f_5c_0,\\
+  g_6 & = f_3c_3 + f_4c_2 + f_5c_1 + f_6c_0,\\
+  g_7 & = f_4c_3 + f_5c_2 + f_6c_1,\\
+  g_8 & = f_5c_3 + f_6c_2,\\
+  g_9 & = f_6c_3,\\
+\end{align*}
+In terms of $a_i,b_i,c_i$, the limbs of $g$ are given by
+\begin{align*}
+  g_0 & = a_0b_0c_0,\\
+  g_1 & = a_0b_0c_1 + a_0b_1c_0 + a_1b_0c_0,\\
+  g_2 & = a_0b_0c_2 + a_0b_1c_1 + a_1b_0c_1 + a_0b_2c_0 + a_1b_1c_0 + a_2b_0c_0,\\
+  g_3 & = a_0b_0c_3 + a_0b_1c_2 + a_1b_0c_2 + a_0b_2c_1 + a_1b_1c_1 + a_2b_0c_1 + a_0b_3c_0 + a_1b_2c_0 + a_2b_1c_0 + a_3b_0c_0,\\
+  g_4 & = a_0b_1c_3 + a_1b_0c_3 + a_0b_2c_2 + a_1b_1c_2 + a_2b_0c_2 + a_0b_3c_1 + a_1b_2c_1 + a_2b_1c_1 + a_3b_0c_1 + a_1b_3c_0 + a_2b_2c_0 + a_3b_1c_0,\\
+  g_5 & = a_0b_2c_3 + a_1b_1c_3 + a_2b_0c_3 + a_0b_3c_2 + a_1b_2c_2 + a_2b_1c_2 + a_3b_0c_2 + a_1b_3c_1 + a_2b_2c_1 + a_3b_1c_1 + a_2b_3c_0 + a_3b_2c_0,\\
+  g_6 & = a_0b_3c_3 + a_1b_2c_3 + a_2b_1c_3 + a_3b_0c_3 + a_1b_3c_2 + a_2b_2c_2 + a_3b_1c_2 + a_2b_3c_1 + a_3b_2c_1 + a_3b_3c_0,\\
+  g_7 & = a_1b_3c_3 + a_2b_2c_3 + a_3b_1c_3 + a_2b_3c_2 + a_3b_2c_2 + a_3b_3c_1,\\
+  g_8 & = a_2b_3c_3 + a_3b_2c_3 + a_3b_3c_2,\\
+  g_9 & = a_3b_3c_3,\\
+\end{align*}
+The limbs $g_4$ and $g_5$ occupy a maximum of 195 bits, 192 bits for the products and 3 bits for the carry from the addition of 12 products. The other limbs occupy fewer than 195 bits.
+
+Since $q = 2^{255}-19$, we have $2^{256} = 38 \bmod q$ and $2^{512} = 38^2 = 1444 \bmod q$. We can rewrite $g$ as
+\begin{align*}
+  g  = \sum^{9}_{i=0} g_i 2^{64i} &= g_0 + g_1 2^{64} + g_2 2^{128} + g_3 2^{192} + g_4 2^{256} +   g_5 2^{320} + g_6 2^{384} + g_7 2^{448} + g_8 2^{512} + g_9 2^{576}\\
+   &= g_0 + g_1 2^{64} + g_2 2^{128} + g_3 2^{192} + 2^{256} \left(  g_4 +   g_5 2^{64} + g_6 2^{128} + g_7 2^{192} \right) + 2^{512}\left(g_8  + g_9 2^{64} \right)\\
+   &= g_0 + g_1 2^{64} + g_2 2^{128} + g_3 2^{192} + 38 \left(  g_4 +   g_5 2^{64} + g_6 2^{128} + g_7 2^{192} \right) + 1444 \left(g_8  + g_9 2^{64} \right)\\
+   &= g_0 + 38 g_4 + 1444 g_8 + 2^{64} \left( g_1 + 38g_5 +1444g_9 \right)+ 2^{128} \left(  g_2 + 38 g_6\right) + 2^{192} \left( g_3 +38 g_7\right)\\
+   & = h_0 + h_1 2^{64} + h_2 2^{128} + h_3 2^{192}.
+\end{align*}
+
+\end{document}
