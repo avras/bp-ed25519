@@ -4,7 +4,7 @@ q = 2**255 - 19
 # Pallas base field order (native field order)
 nf_order = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
 # Vesta base field order (native field order)
-# nnf_order = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001
+# nf_order = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001
 width = 64 # Limb width
 Fn = GF(nf_order)
 Fq = GF(q)
