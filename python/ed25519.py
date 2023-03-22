@@ -1,5 +1,7 @@
 # Code from https://ed25519.cr.yp.to/software.html
-# Minor changes to perform correct integer division. a//2 instead of a/2
+# Minor changes to perform correct integer division.
+#  a//2 instead of a/2
+# Added modulo q operation in d calculation
 import hashlib
 
 b = 256
@@ -18,7 +20,7 @@ def expmod(b,e,m):
 def inv(x):
   return expmod(x,q-2,q)
 
-d = -121665 * inv(121666)
+d = (-121665 * inv(121666)) % q
 I = expmod(2,(q-1)//4,q)
 
 def xrecover(y):
