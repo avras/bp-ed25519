@@ -1,4 +1,5 @@
 # Code from https://ed25519.cr.yp.to/software.html
+# Minor changes to perform correct integer division. a//2 instead of a/2
 import hashlib
 
 b = 256
@@ -10,7 +11,7 @@ def H(m):
 
 def expmod(b,e,m):
   if e == 0: return 1
-  t = expmod(b,e/2,m)**2 % m
+  t = expmod(b,e//2,m)**2 % m
   if e & 1: t = (t*b) % m
   return t
 
@@ -18,11 +19,11 @@ def inv(x):
   return expmod(x,q-2,q)
 
 d = -121665 * inv(121666)
-I = expmod(2,(q-1)/4,q)
+I = expmod(2,(q-1)//4,q)
 
 def xrecover(y):
   xx = (y*y-1) * inv(d*y*y+1)
-  x = expmod(xx,(q+3)/8,q)
+  x = expmod(xx,(q+3)//8,q)
   if (x*x - xx) % q != 0: x = (x*I) % q
   if x % 2 != 0: x = q-x
   return x
@@ -42,7 +43,7 @@ def edwards(P,Q):
 
 def scalarmult(P,e):
   if e == 0: return [0,1]
-  Q = scalarmult(P,e/2)
+  Q = scalarmult(P,e//2)
   Q = edwards(Q,Q)
   if e & 1: Q = edwards(Q,P)
   return Q
