@@ -27,7 +27,7 @@ The identity element is the point $(0,1)$. The above addition law works even whe
 \label{sec:verifying_point_addition}
 In the context of SNARKs, we are concerned with verifying that three points $P, Q, R \in E$ satisfy $R= P+Q$ using an arithmetic circuit. The main challenge is the representation of the arithmetic over $\mathbb{F}_q$ using field elements from a different finite field $\mathbb{F}_n$. The field $\mathbb{F}_n$ is called the \textit{native field} and the arithmetic over $\mathbb{F}_q$ is called \textit{non-native arithmetic}.
 
-A few popular choices for the native field have $r$ equal to a 254-bit prime. The \textit{capacity} of such fields is then 253 bits, i.e.~they can represent any integer in the range $\{0,1,\ldots,2^{253}-1\}$. In this document, we exclusively focus on this case.
+A few popular choices for the native field have $r$ either equal to a 254-bit prime or a 255-bit prime. The \textit{capacity} of such fields is then atmost 253 bits, i.e.~they can represent any integer in the range $\{0,1,\ldots,2^{253}-1\}$. In this document, we exclusively focus on this case.
 
 An element of $\mathbb{F}_q$ requires 255 bits and hence cannot be expressed a single element of $\mathbb{F}_n$. While two elements of $\mathbb{F}_n$ suffice to represent an element of $\mathbb{F}_q$, we will use more than two to allow the representations of products of $\mathbb{F}_q$ elements.
 
@@ -177,8 +177,8 @@ We propose to try the following approach. It is inspired by the \texttt{circom-e
   \item Calculate the reduced representation of the cubic $uy_1y_2$. Let this representation be given by $v = \sum_{i=0}^{3}v_i 2^{64i}$. Note that $v$ corresponds to the reduced representation of $dx_1x_2y_1y_2$.
   \item Check that the following quadratic equations hold.
     \begin{align*}
-      x_3 + x_3 v - x_1y_2 - x_2y_1 = 0,\\
-      y_3 - y_3 v - x_1x_2 - y_1y_2 = 0.\\
+      & x_1y_2 + x_2y_1 -x_3 - x_3 v = 0,\\
+      & x_1x_2 + y_1y_2 -y_3 + y_3 v = 0.
     \end{align*}
 \end{itemize}
 
@@ -331,5 +331,137 @@ The bitwidths of the terms $h_i, q_i, t_i, r_i$ will be known due to range check
   \item $y_2+h_3-t_0q_3-t_1q_2-t_2q_1-r_3$ is in the range $\{-2^{206}+1,\ldots, 2^{206}-1\}$. Since $y_3 = \frac{y_2+h_3-t_0q_3-t_1q_2-t_2q_1-r_3}{2^{64}}$, we can check that $y_3$ is in the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_3 + 2^{142}$ is in the range $\{0,1,\ldots,2^{143}-1\}$.
   \item $y_3-t_1q_3-t_2q_2$ is (conservatively) in the range $\{-2^{206}+1,\ldots, 2^{206}-1\}$. Since $y_4 = \frac{y_3-t_1q_3-t_2q_2}{2^{64}}$, we can check that $y_4$ is in the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_4 + 2^{142}$ is in the range $\{0,1,\ldots,2^{143}-1\}$.
 \end{itemize}
-To simplify the arithmetic circuit logic (at least initially), the range checks on all the $y_i$'s can be for the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. Later the range check on $y_4$ can be for the smaller range $\{-2^{141}+1,\ldots,2^{141}-1\}$ and on $y_4$ can be for the smaller range $\{-2^{79}+1,\ldots,2^{79}-1\}$.
+To simplify the arithmetic circuit logic (at least initially), the range checks on all the $y_i$'s can be for the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. Later the range check on $y_0$ can be for the smaller range $\{-2^{141}+1,\ldots,2^{141}-1\}$ and on $y_4$ can be for the smaller range $\{-2^{79}+1,\ldots,2^{79}-1\}$.
+
+\section{Reducing a Quadratic Expression}%
+\label{sec:reducing_a_quadratic_expression}
+In Section \ref{sec:reducing_a_cubic_product}, the cubic products being reduced had positive values due to the approach chosen in Section \ref{subsec:an_approach_using_four_64_bit_limbs}. Recall our convention that $x \in \mathbb{F}_n$ is positive if $x \le \frac{n-1}{2}$. Even after the folding shown in Section \ref{sec:reducing_a_cubic_product}, the values remain positive. Consequently, the quotient $t$ could be bounded in magnitude by $2^{138}$ and represented using three 64-bit limbs.
+
+On the other hand, the quadratic expressions we plan to verify can have negative values as they have the form
+\begin{align*}
+  & x_1y_2 + x_2y_1 -x_3 - x_3 v = 0,\\
+  & x_1x_2 + y_1y_2 -y_3 + y_3 v = 0.
+\end{align*}
+Note that we need to check that the LHS is equal to zero modulo $q$ in the above two equations. This can be done by showing that the expressions are a multiple of $q$. Negative values for the LHS will require negative quotients which will require more limbs to represent. For example, a quotient $-1 \in \mathbb{F}_q$ will require four limbs.
+
+%We can ensure the expressions are positive by rewriting them as
+%\begin{align*}
+%  & x_1y_2 + x_2y_1 -x_3(1 + v) = x_1y_2 + x_2y_1 +(q-x_3)(1 + v) = 0 \bmod q,\\
+%  & x_1x_2 + y_1y_2 +y_3v - y_3 = x_1x_2 + y_1y_2 +y_3v + q - y_3 = 0 \bmod q.
+%\end{align*}
+%The limbs of $q-x_3$ and $q-y_3$ can be negative but the numbers will be positive overall.
+%Let $f_{12} = x_1y_2$. Then we have $f_{12} = \sum_{i=0}^{6} f_{12,i} 2^{64i}$ where
+%\begin{align*}
+%  f_{12,0} & = x_{1,0}y_{2,0},\\
+%  f_{12,1} & = x_{1,0}y_{2,1} + x_{1,1}y_{2,0},\\
+%  f_{12,2} & = x_{1,0}y_{2,2} + x_{1,1}y_{2,1} + x_{1,2}y_{2,0},\\
+%  f_{12,3} & = x_{1,0}y_{2,3} + x_{1,1}y_{2,2} + x_{1,2}y_{2,1} + x_{1,3}y_{2,0},\\
+%  f_{12,4} & = x_{1,1}y_{2,3} + x_{1,2}y_{2,2} + x_{1,3}y_{2,1},\\
+%  f_{12,5} & = x_{1,2}y_{2,3} + x_{1,3}y_{2,2},\\
+%  f_{12,6} & = x_{1,3}y_{2,3}.
+%\end{align*}
+Let $a,b$ be two elements in $\mathbb{F}_q$ available in their reduced representations.
+\begin{align*}
+  a = \sum^{3}_{i=0} a_i 2^{64i}, \ \ \ \ b = \sum^{3}_{i=0} b_i 2^{64i}.
+\end{align*}
+Let $f = ab$. Then we have $f = \sum_{i=0}^{6} f_i 2^{64i}$ where
+\begin{align*}
+  f_0 & = a_0b_0,\\
+  f_1 & = a_0b_1 + a_1b_0,\\
+  f_2 & = a_0b_2 + a_1b_1 + a_2b_0,\\
+  f_3 & = a_0b_3 + a_1b_2 + a_2b_1 + a_3b_0,\\
+  f_4 & = a_1b_3 + a_2b_2 + a_3b_1,\\
+  f_5 & = a_2b_3 + a_3b_2,\\
+  f_6 & = a_3b_3.
+\end{align*}
+
+Since $q = 2^{255}-19$, we have $2^{256} = 38 \bmod q$. We can rewrite $f$ as
+\begin{align*}
+  f  = \sum^{6}_{i=0} f_i 2^{64i} &= f_0 + f_1 2^{64} + f_2 2^{128} + f_3 2^{192} + f_4 2^{256} +   f_5 2^{320} + f_6 2^{384}\\
+   &= f_0 + f_1 2^{64} + f_2 2^{128} + f_3 2^{192} + 2^{256} \left(  f_4 +   f_5 2^{64} + f_6 2^{128} \right)\\
+   &= f_0 + f_1 2^{64} + f_2 2^{128} + f_3 2^{192} + 38 \left(  f_4 +   f_5 2^{64} + f_6 2^{128} \right)\\
+   &= f_0 + 38 f_4 + 2^{64} \left( f_1 + 38f_5 \right)+ 2^{128} \left(  f_2 + 38 f_6\right) + f_3 2^{192}\\
+   & = h_0 + h_1 2^{64} + h_2 2^{128} + h_3 2^{192},
+\end{align*}
+where
+\begin{align*}
+  h_0 & = f_0 + 38 f_4,\\
+  h_1 & = f_1 + 38 f_5,\\
+  h_2 & = f_2 + 38 f_6,\\
+  h_3 & = f_3.\\
+\end{align*}
+We note the following:
+\begin{itemize}
+  \item Each of the $f_i$'s occupy a maximum of 130 bits.
+  \item The number 38 occupies 6 bits.
+  \item $f_4$ occupies a maximum of 129 bits
+  \item $38f_4$ occupies a maximum of 135 bits. This implies $h_0$ can occupy a maximum of 136 bits.
+  \item By the same argument, $h_1$ occupies a maximum of 136 bits.
+  \item $f_2$ occupies a maximum of 129 bits
+  \item $38f_6$ occupies a maximum of 134 bits. This implies $h_2$ can occupy a maximum of 135 bits.
+  \item $h_3$ occupies a maximum of 128 bits.
+  \item So all the $h_i$'s can fit in $\mathbb{F}_n$ limbs.
+  \item The maximum value of $f$ is bounded by
+    \begin{align*}
+      2^{136} - 1 + \left(2^{136} - 1\right) 2^{64}+ \left( 2^{135}-1 \right)2^{128}+ \left( 2^{128}-1 \right)2^{192} < 2^{136} + 2^{200} + 2^{263} + 2^{320} < 2^{321}
+    \end{align*}
+\end{itemize}
+
+We can then conclude that the expression $x_1y_2+x_2y_1-x_3-x_3v$ will (conservatively) be in the range $\{-2^{323}+1,\ldots,2^{323}-1\}$. The same conclusion holds for the expression $x_1x_2 + y_1y_2 -y_3 + y_3 v$.
+
+As $q > 2^{254}$, adding $2^{70}q$ to these two expressions will make the corresponding sums positive. Note that the individual limbs of $x_1y_2+x_2y_1-x_3-x_3v + 2^{70}q$ and $x_1x_2 + y_1y_2 -y_3 + y_3 v + 2^{70}q$ can be negative but the integers themselves will be positive. Moreover each limb will have magnitude less than $2^{138}$. This is because each product in $\{x_1y_2, x_2y_1, x_3v, x_1x_2, y_1y_2, x_3v\}$ has limbs with magnitude less than $2^{136}$. The four limbs of $2^{70}q$ occupy a maximum of 134 bits.
+
+
+Let $g$ be equal to $x_1y_2+x_2y_1-x_3-x_3v + 2^{70}q$ or $x_1x_2 + y_1y_2 -y_3 + y_3 v + 2^{70}q$. Let the unreduced representation of $g$ be
+\begin{align*}
+  g = g_0 + g_1 2^{64} + g_2 2^{128} + g_3 2^{192},
+\end{align*}
+where each $g_i \in \{0,\ldots,2^{138}-1\}$. The value of $g$ is less than $2^{326}$.
+
+To show that $g = 0 \bmod q$, we show the existence of a quotient $t$ such that $g-tq = 0$. As $q > 2^{254}$ and $g < 2^{326}$, the maximum value of $t$ required to satisfy this equation is $2^{326-254} = 2^{72}$. So the quotient requires only two 64-bit limbs in its reduced representation.
+\begin{align*}
+  t = t_0 + t_1 2^{64}\ \ \ \ \ \text{ where } t_i \in \{0,1,\ldots,2^{64}-1\}.
+\end{align*}
+The prime $q$ will have four 64-bit limbs.
+\begin{align*}
+  q = q_0 + q_1 2^{64} + q_2 2^{128} + q_3 2^{192} \ \ \ \ \ \text{ where } q_i \in \{0,1,\ldots,2^{64}-1\}.
+\end{align*}
+The product $tq$ has an unreduced representation with five limbs each occupying upto 129 bits.
+\begin{align*}
+  tq  = t_0q_0 + (t_0q_1 + t_1q_0) 2^{64} + (t_0q_2 + t_1q_1) 2^{128} + (t_0q_3 + t_1q_2) 2^{192} + t_1q_3 2^{256}.
+\end{align*}
+Consider the following argument to check that $g-tq = 0$.
+\begin{enumerate}
+  \item $g_0-t_0q_0$ contains the 64 least significant bits of $g-tq$, i.e.~bits 0 to 63. These bits must all be zero. So $g_0-t_0q_0$ must be a multiple of $2^{64}$. 
+  \item Let $y_0 = \frac{g_0-t_0q_0}{2^{64}}$. This represents the \textit{carry} into the $2^{64}$ limb.
+  \item $y_0+g_1-t_0q_1-t_1q_0$ contains the \textit{next} 64 least significant bits of $g-tq$, i.e.~bits 64 to 127. These bits must also all be zero. So $y_0+g_1-t_0q_1-t_1q_0$ must be a multiple of $2^{64}$.
+  \item Let $y_1 = \frac{y_0+g_1-t_0q_1-t_1q_0}{2^{64}}$. This represents the carry into the $2^{128}$ limb.
+  \item $y_1+g_2-t_0q_2-t_1q_1$ contains the next 64 least significant bits of $g-tq$, i.e.~bits 128 to 191. These bits must also all be zero. So $y_1+g_2-t_0q_2-t_1q_1$ must be a multiple of $2^{64}$.
+  \item Let $y_2 = \frac{y_1+g_2-t_0q_2-t_1q_1}{2^{64}}$. This represents the carry into the $2^{192}$ limb.
+  \item $y_2+g_3-t_0q_3-t_1q_2$ contains the next 64 least significant bits of $g-tq$, i.e.~bits 192 to 255. These bits must also all be zero. So $y_2+g_3-t_0q_3-t_1q_2$ must be a multiple of $2^{64}$.
+  \item Let $y_3 = \frac{y_2+g_3-t_0q_3-t_1q_2}{2^{64}}$. This represents the carry into the $2^{256}$ limb.
+  \item $y_3-t_1q_3$ contains the remaining 70 least significant bits of $g-tq$, i.e.~bits 256 to 325. Recall that $g$ is bounded by $2^{326}$. These bits must also all be zero. So $y_3-t_1q_3$ \textit{must be zero}.
+\end{enumerate}
+
+As the $g_i$'s have a maximum bitwidth of 138, the following terms (the unreduced limbs of $g-tq$) lie in the range $\{-2^{138}+1,\ldots, 2^{138}-1\}$.
+\begin{align*}
+  & g_0 - t_0q_0,\\
+  & g_1 - t_0q_1-t_1q_0,\\
+  & g_2 - t_0q_2-t_1q_1,\\
+  & g_3 -  t_0q_3-t_1q_2,\\
+  & - t_1q_3.
+\end{align*}
+Both the upper and lower ends of the ranges are conservative but we keep these values for convenience.
+
+
+The carries $y_0,y_1,y_2,y_3$ will be provided as non-deterministic advice to the arithmetic circuit. Instead of calculating $y_0$ as $\frac{g_0-t_0q_0}{2^{64}}$, we will check that $2^{64}y_0 = g_0-t_0q_0$ in the field $\mathbb{F}_n$. We need to apply range checks on the $y_i$'s to ensure that adding them will not exceed the capacity of $\mathbb{F}_n$.
+
+\begin{itemize}
+  \item As $g_0 - t_0q_0$ is in the range $\{-2^{138}+1,\ldots, 2^{138}-1\}$, $y_0$ can be checked to be in the range $\{-2^{74}+1,\ldots, 2^{74}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_0 + 2^{74}$ is in the range $\{0,1,\ldots,2^{75}-1\}$.
+  \item $y_0+g_1-t_0q_1-t_1q_0$ is in the range $\{-2^{139}+1,\ldots, 2^{139}-1\}$. Since $y_1 = \frac{y_0+g_1-t_0q_1-t_1q_0}{2^{64}}$, we can check that $y_1$ is in the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_1 + 2^{75}$ is in the range $\{0,1,\ldots,2^{76}-1\}$.
+  \item $y_1+g_2-t_0q_2-t_1q_1$ is in the range $\{-2^{139}+1,\ldots, 2^{139}-1\}$. Since $y_2 = \frac{y_1+g_2-t_0q_2-t_1q_1}{2^{64}}$, we can check that $y_2$ is in the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_2 + 2^{75}$ is in the range $\{0,1,\ldots,2^{76}-1\}$.
+  \item $y_2+g_3-t_0q_3-t_1q_2$ is in the range $\{-2^{139}+1,\ldots, 2^{139}-1\}$. Since $y_3 = \frac{y_2+g_3-t_0q_3-t_1q_2}{2^{64}}$, we can check that $y_3$ is in the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_3 + 2^{75}$ is in the range $\{0,1,\ldots,2^{76}-1\}$.
+\end{itemize}
+To simplify the arithmetic circuit logic (at least initially), the range checks on all the $y_i$'s can be for the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. Later the range check on $y_0$ can be for the smaller range $\{-2^{74}+1,\ldots,2^{74}-1\}$.
+
 \end{document}
