@@ -3,6 +3,7 @@ use std::ops::{Add, Sub};
 use ff::{PrimeField, PrimeFieldBits};
 use num_bigint::BigUint;
 use num_traits::{Zero, One};
+use crate::field::Fe25519;
 
 
 
@@ -52,6 +53,17 @@ where
         res
     }
 
+}
+
+impl<F> From<&Fe25519> for LimbedInt<F>
+where
+    F: PrimeField + PrimeFieldBits
+{
+    fn from(value: &Fe25519) -> Self {
+        let bytes: [u8; 32] = value.to_repr().try_into().unwrap();
+        let i = BigUint::from_bytes_le(&bytes);
+        LimbedInt::<F>::from(&i)
+    }
 }
 
 impl<F> Add<LimbedInt<F>> for LimbedInt<F>
@@ -210,11 +222,19 @@ mod tests {
     use pasta_curves::Fp;
 
     #[test]
-    fn limbed_int_roundtrip() {
+    fn limbed_int_biguint_roundtrip() {
         let mut rng = rand::thread_rng();
         let big_uint = rng.gen_biguint(256u64);
         let limbed_int = LimbedInt::<Fp>::from(&big_uint);
         assert_eq!(big_uint, BigUint::from(&limbed_int));
+    }
+
+    #[test]
+    fn limbed_int_fe_roundtrip() {
+        let rng = rand::thread_rng();
+        let fe = Fe25519::random(rng);
+        let limbed_int = LimbedInt::<Fp>::from(&fe);
+        assert_eq!(BigUint::from_bytes_le(&fe.to_repr()), BigUint::from(&limbed_int));
     }
 
     #[test]
