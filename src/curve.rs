@@ -4,13 +4,13 @@ use crypto_bigint::{U256, Integer};
 use ff::{Field, PrimeField};
 use crate::field::Fe25519;
 
-const D: Fe25519 =
+pub(crate) const D: Fe25519 =
     Fe25519(U256::from_be_hex("52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3"));
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub struct AffinePoint {
-    x: Fe25519,
-    y: Fe25519,
+    pub(crate) x: Fe25519,
+    pub(crate) y: Fe25519,
 }
 
 impl Add<AffinePoint> for AffinePoint {
