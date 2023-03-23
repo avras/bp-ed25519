@@ -145,7 +145,7 @@ where
     T: Borrow<Fe25519>
 {
     fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
-        iter.fold(Fe25519::ZERO, |acc, item| acc + item.borrow())
+        iter.fold(Fe25519::zero(), |acc, item| acc + item.borrow())
     }
 }
 
@@ -154,7 +154,7 @@ where
     T: Borrow<Fe25519>
 {
     fn product<I: Iterator<Item = T>>(iter: I) -> Self {
-        iter.fold(Fe25519::ONE, |acc, item| acc * item.borrow())
+        iter.fold(Fe25519::one(), |acc, item| acc * item.borrow())
     }
 }
 
@@ -171,9 +171,13 @@ impl AsRef<[u64]> for Fe25519 {
 }
 
 impl Field for Fe25519 {
-    const ZERO: Self = Self(U256::ZERO);
+    fn zero() -> Self {
+        Self(U256::ZERO)
+    }
 
-    const ONE: Self = Self(U256::ONE);
+    fn one() -> Self {
+        Self(U256::ONE)
+    }
 
     fn random(mut rng: impl RngCore) -> Self {
         let mut bytes = [0; 32];
@@ -191,36 +195,56 @@ impl Field for Fe25519 {
 
     fn invert(&self) -> CtOption<Self> {
         const NEG_2: Fe25519 = Self(MODULUS.saturating_sub(&U256::from_u8(2)));
-        CtOption::new(self.pow(NEG_2), !self.is_zero())
+        CtOption::new(self.pow_vartime(NEG_2), !self.is_zero())
     }
 
     // https://www.rfc-editor.org/rfc/rfc8032#section-5.1.3
-    fn sqrt_ratio(u: &Self, v: &Self) -> (Choice, Self) {
-        let v_sq = v.square();
-        let uv = (*u)*(*v);
-        let uv3 = uv * v_sq;
-
-        let v_pow4 = v_sq.square();
-        let v_pow6 = v_pow4 * v_sq;
-        let uv7 = uv * v_pow6;
-
-        let five = Fe25519::from(5u64);
+    fn sqrt(&self) -> CtOption<Self> {
+        let three = Fe25519::from(3u64);
         let one_by_eight = Fe25519::from(8u64).invert().unwrap();
-        let exponent = (FIELD_MODULUS - five)*one_by_eight;
-        let beta = uv3 * uv7.pow(exponent); // candidate square root
+        let exponent = (FIELD_MODULUS + three)*one_by_eight;
+        let beta = self.pow_vartime(exponent); // candidate square root
         
         let beta_sq = beta.square();
-        let is_sq_root = (*v * beta_sq - *u).is_zero() | (*v * beta_sq + *u).is_zero();
+        let is_sq_root = (beta_sq - self).is_zero() | (beta_sq + self).is_zero();
 
-        let neg_not_required = (*v * beta_sq - *u).is_zero();
+        let neg_not_required = (beta_sq - self).is_zero();
         let sq_root = if bool::from(neg_not_required) {
             beta
         }
         else {
             beta*SQRT_MINUS_ONE
         };
-        (is_sq_root, sq_root)
+        CtOption::new(sq_root, is_sq_root)
     }
+
+    // // https://www.rfc-editor.org/rfc/rfc8032#section-5.1.3
+    // fn sqrt_ratio(u: &Self, v: &Self) -> (Choice, Self) {
+    //     let v_sq = v.square();
+    //     let uv = (*u)*(*v);
+    //     let uv3 = uv * v_sq;
+
+    //     let v_pow4 = v_sq.square();
+    //     let v_pow6 = v_pow4 * v_sq;
+    //     let uv7 = uv * v_pow6;
+
+    //     let five = Fe25519::from(5u64);
+    //     let one_by_eight = Fe25519::from(8u64).invert().unwrap();
+    //     let exponent = (FIELD_MODULUS - five)*one_by_eight;
+    //     let beta = uv3 * uv7.pow(exponent); // candidate square root
+        
+    //     let beta_sq = beta.square();
+    //     let is_sq_root = (*v * beta_sq - *u).is_zero() | (*v * beta_sq + *u).is_zero();
+
+    //     let neg_not_required = (*v * beta_sq - *u).is_zero();
+    //     let sq_root = if bool::from(neg_not_required) {
+    //         beta
+    //     }
+    //     else {
+    //         beta*SQRT_MINUS_ONE
+    //     };
+    //     (is_sq_root, sq_root)
+    // }
 }
 
 impl PrimeField for Fe25519 {
@@ -239,27 +263,25 @@ impl PrimeField for Fe25519 {
         self.0.is_odd()
     }
 
-    const MODULUS: &'static str = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed";
+    // const MODULUS: &'static str = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed";
 
     const NUM_BITS: u32 = 255;
 
     const CAPACITY: u32 = 254;
 
-    const TWO_INV: Self =
-        Self(U256::from_be_hex("3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"));
+    // const TWO_INV: Self =
+    //     Self(U256::from_be_hex("3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"));
 
-    const MULTIPLICATIVE_GENERATOR: Self = Self(U256::from_u8(2));
 
     const S: u32 = 2;
 
-    const ROOT_OF_UNITY: Self =
-        Self(U256::from_be_hex("2b8324804fc1df0b2b4d00993dfbd7a72f431806ad2fe478c4ee1b274a0ea0b0"));
+    fn multiplicative_generator() -> Self {
+        Self(U256::from_u8(2))
+    }
 
-    const ROOT_OF_UNITY_INV: Self =
-        Self(U256::from_be_hex("547cdb7fb03e20f4d4b2ff66c2042858d0bce7f952d01b873b11e4d8b5f15f3d"));
-
-    const DELTA: Self = Self(U256::from_u8(16));
-
+    fn root_of_unity() -> Self {
+        Self(U256::from_be_hex("2b8324804fc1df0b2b4d00993dfbd7a72f431806ad2fe478c4ee1b274a0ea0b0"))
+    }
 }
 
 impl PrimeFieldBits for Fe25519 {
@@ -278,6 +300,14 @@ impl PrimeFieldBits for Fe25519 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const TWO_INV: Fe25519 =
+        Fe25519(U256::from_be_hex("3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"));
+
+    const ROOT_OF_UNITY_INV: Fe25519 =
+        Fe25519(U256::from_be_hex("547cdb7fb03e20f4d4b2ff66c2042858d0bce7f952d01b873b11e4d8b5f15f3d"));
+
+    const DELTA: Fe25519 = Fe25519(U256::from_u8(16));
+
 
     #[test]
     fn sanity_checks() {
@@ -286,25 +316,25 @@ mod tests {
         let expected_four = Fe25519::from(4u64);
 
         assert_eq!(four, expected_four);
-        assert_eq!(Fe25519::TWO_INV*two, Fe25519::ONE);
-        assert_eq!(two.pow(two), four);
+        assert_eq!(TWO_INV*two, Fe25519::one());
+        assert_eq!(two.pow_vartime(two), four);
         assert_eq!(two.square(), four);
 
         let two_inv = two.invert().unwrap();
-        assert_eq!(two_inv, Fe25519::TWO_INV);
+        assert_eq!(two_inv, TWO_INV);
     }
 
     #[test]
     fn check_params() {
-        assert_eq!(Fe25519::ROOT_OF_UNITY*Fe25519::ROOT_OF_UNITY_INV, Fe25519::ONE);
-        assert_eq!(Fe25519::MULTIPLICATIVE_GENERATOR.pow(Fe25519(MODULUS)-Fe25519::ONE), Fe25519::ONE);
+        assert_eq!(Fe25519::root_of_unity()*ROOT_OF_UNITY_INV, Fe25519::one());
+        assert_eq!(Fe25519::multiplicative_generator().pow_vartime(Fe25519(MODULUS)-Fe25519::one()), Fe25519::one());
         
         let two = Fe25519::from(2u64);
-        let two_pow_s = two.pow(Fe25519::from(Fe25519::S as u64));
-        assert_eq!(Fe25519::ROOT_OF_UNITY.pow(two_pow_s), Fe25519::ONE);
+        let two_pow_s = two.pow_vartime(Fe25519::from(Fe25519::S as u64));
+        assert_eq!(Fe25519::root_of_unity().pow_vartime(two_pow_s), Fe25519::one());
 
-        let t = (Fe25519(MODULUS)-Fe25519::ONE) * (two_pow_s.invert().unwrap());
-        assert_eq!(Fe25519::DELTA.pow(t), Fe25519::ONE);
+        let t = (Fe25519(MODULUS)-Fe25519::one()) * (two_pow_s.invert().unwrap());
+        assert_eq!(DELTA.pow_vartime(t), Fe25519::one());
     }
 
     #[test]
@@ -313,7 +343,7 @@ mod tests {
         let mut x = Fe25519::random(&mut rng);
         let y = Fe25519::random(&mut rng);
         let neg_y = -y;
-        assert_eq!(y+neg_y, Fe25519::ZERO);
+        assert_eq!(y+neg_y, Fe25519::zero());
         assert_eq!(x+neg_y, x-y);
 
         let old_x = x;
@@ -338,7 +368,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let mut x = Fe25519::random(&mut rng);
         let y = Fe25519::random(&mut rng);
-        assert_eq!(x.invert().unwrap()*x, Fe25519::ONE);
+        assert_eq!(x.invert().unwrap()*x, Fe25519::one());
 
         let old_x = x;
         x *= y;
@@ -376,13 +406,13 @@ mod tests {
     #[test]
     fn check_cteq() {
         let two = Fe25519::from(2u64);
-        let two_alt = Fe25519::ONE + Fe25519::ONE;
+        let two_alt = Fe25519::one() + Fe25519::one();
         assert!(bool::from(two.ct_eq(&two_alt)));
     }
 
     #[test]
     fn check_conditonal_select() {
-        let one = Fe25519::ONE;
+        let one = Fe25519::one();
         let two = Fe25519::from(2u64);
         let x = Fe25519::conditional_select(&one, &two, Choice::from(0u8));
         let y = Fe25519::conditional_select(&one, &two, Choice::from(1u8));
@@ -396,17 +426,17 @@ mod tests {
         assert!(bool::from(two.sqrt().is_none()));
 
         let four = two.square();
-        let (is_sq_root, sq_root) = Fe25519::sqrt_ratio(&four, &Fe25519::ONE);
-        assert!(bool::from(is_sq_root));
-        assert!(sq_root == two || sq_root == -two);
+        let sq_root = Fe25519::sqrt(&four);
+        assert!(bool::from(sq_root.is_some()));
+        assert!(sq_root.unwrap() == two || sq_root.unwrap() == -two);
 
         let mut rng = rand::thread_rng();
         let x = Fe25519::random(&mut rng);
         let x_sq = x.square();
-        let (is_sq_root, sq_root) = Fe25519::sqrt_ratio(&x_sq, &Fe25519::ONE);
-        assert!(bool::from(is_sq_root));
-        assert!(sq_root == x || sq_root == -x);
-        assert_eq!(sq_root.square(), x_sq);
+        let sq_root = Fe25519::sqrt(&x_sq);
+        assert!(bool::from(sq_root.is_some()));
+        assert!(sq_root.unwrap() == x || sq_root.unwrap() == -x);
+        assert_eq!(sq_root.unwrap().square(), x_sq);
     }
 
 }
