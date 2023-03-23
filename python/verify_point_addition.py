@@ -75,7 +75,7 @@ def fold_cubic_limbs(g_l):
 
 def fold_quadratic_limbs(f_l):
     assert(len(f_l) == 7)
-    h_l = [0]*7
+    h_l = [0]*4
     h_l[0] = f_l[0]+38*f_l[4]
     h_l[1] = f_l[1]+38*f_l[5]
     h_l[2] = f_l[2]+38*f_l[6]
