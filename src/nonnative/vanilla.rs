@@ -1,6 +1,6 @@
 use std::ops::{Add, Sub, Rem};
 
-use ff::{PrimeField, PrimeFieldBits};
+use ff::{PrimeField, PrimeFieldBits, Field};
 use num_bigint::BigUint;
 use num_traits::{Zero, One};
 use crate::{field::Fe25519, curve::{AffinePoint, D}};
@@ -353,6 +353,61 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct LimbedAffinePoint<F: PrimeField + PrimeFieldBits> {
+    pub(crate) x: LimbedInt<F>,
+    pub(crate) y: LimbedInt<F>,
+}
+
+impl<F> Default for LimbedAffinePoint<F>
+where
+    F: PrimeField + PrimeFieldBits
+{
+    fn default() -> Self {
+        Self {
+            x: LimbedInt::<F>::from(&Fe25519::ZERO),
+            y: LimbedInt::<F>::from(&Fe25519::ONE),
+        }
+    }
+}
+
+impl<F> From<&AffinePoint> for LimbedAffinePoint<F>
+where
+    F: PrimeField + PrimeFieldBits
+{
+    fn from(value: &AffinePoint) -> Self {
+        Self {
+            x: LimbedInt::<F>::from(&value.x),
+            y: LimbedInt::<F>::from(&value.y),
+        }
+    }
+}
+
+impl<F: PrimeField + PrimeFieldBits> LimbedAffinePoint<F> {
+    fn verify_ed25519_point_addition(
+        p: &Self,
+        q: &Self,
+        r: &Self,
+        u: &LimbedInt<F>,
+        v: &LimbedInt<F>,
+    ) -> bool {
+        let x1_l = &p.x;
+        let y1_l = &p.y;
+        let x2_l = &q.x;
+        let y2_l = &q.y;
+        let x3_l = &r.x;
+        let y3_l = &r.y;
+
+        let d_l = LimbedInt::<F>::from(&D);
+        
+        LimbedInt::<F>::verify_cubic_product(&d_l, x1_l, x2_l, u)
+             & LimbedInt::<F>::verify_cubic_product(&u, y1_l, y2_l, v)
+             & LimbedInt::<F>::verify_x_coordinate_quadratic_is_zero(x1_l, x2_l, y1_l, y2_l, x3_l, v)
+             & LimbedInt::<F>::verify_y_coordinate_quadratic_is_zero(x1_l, x2_l, y1_l, y2_l, y3_l, v)
+
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -484,5 +539,24 @@ mod tests {
         assert!(LimbedInt::<Fp>::verify_ed25519_point_addition(&p, &q, &r));
     }
 
+    #[test]
+    fn limbed_affine_point_addition_verification() {
+        let b = Ed25519Curve::basepoint();
+        let mut rng = rand::thread_rng();
+        let scalar = U256::random(&mut rng);
+        let p = Ed25519Curve::scalar_multiplication(&b, &scalar);
+        let scalar = U256::random(&mut rng);
+        let q = Ed25519Curve::scalar_multiplication(&b, &scalar);
+        let r = p.add(q);
+
+        let p_l = LimbedAffinePoint::<Fp>::from(&p);
+        let q_l = LimbedAffinePoint::<Fp>::from(&q);
+        let r_l = LimbedAffinePoint::<Fp>::from(&r);
+        let u = D*p.x*q.x;
+        let v = u*p.y*q.y;
+        let u_l = LimbedInt::<Fp>::from(&u);
+        let v_l = LimbedInt::<Fp>::from(&v);
+        assert!(LimbedAffinePoint::<Fp>::verify_ed25519_point_addition(&p_l, &q_l, &r_l, &u_l, &v_l));
+    }
 
 }
