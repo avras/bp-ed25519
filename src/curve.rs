@@ -2,15 +2,15 @@ use std::ops::{Add, Neg, Sub};
 
 use crypto_bigint::{U256, Integer};
 use ff::{Field, PrimeField};
-use crate::field::Fp;
+use crate::field::Fe25519;
 
-const D: Fp =
-    Fp(U256::from_be_hex("52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3"));
+const D: Fe25519 =
+    Fe25519(U256::from_be_hex("52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3"));
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub struct AffinePoint {
-    x: Fp,
-    y: Fp,
+    x: Fe25519,
+    y: Fe25519,
 }
 
 impl Add<AffinePoint> for AffinePoint {
@@ -47,7 +47,7 @@ impl AffinePoint {
     }
 
     pub fn is_zero(&self) -> bool {
-        self.x == Fp::ZERO && self.y == Fp::ONE
+        self.x == Fe25519::ZERO && self.y == Fe25519::ONE
     }
 
     pub fn double(&self) -> Self {
@@ -57,16 +57,16 @@ impl AffinePoint {
 
 impl Default for AffinePoint {
     fn default() -> Self {
-        Self { x: Fp::ZERO, y: Fp::ONE }
+        Self { x: Fe25519::ZERO, y: Fe25519::ONE }
     }
 }
 
 pub struct Ed25519Curve;
 
 impl Ed25519Curve {
-    pub fn recover_even_x_from_y(y: Fp) -> Fp {
+    pub fn recover_even_x_from_y(y: Fe25519) -> Fe25519 {
         let y_sq = y.square();
-        let x_sq = (y_sq - Fp::ONE) * (D*y_sq + Fp::ONE).invert().unwrap();
+        let x_sq = (y_sq - Fe25519::ONE) * (D*y_sq + Fe25519::ONE).invert().unwrap();
 
         let (is_sqroot, x) = x_sq.sqrt_alt();
         assert!(bool::from(is_sqroot)); // y must correspond to a curve point
@@ -79,7 +79,7 @@ impl Ed25519Curve {
     }
 
     pub fn basepoint() -> AffinePoint {
-        let y = Fp::from(4u64) * Fp::from(5u64).invert().unwrap();
+        let y = Fe25519::from(4u64) * Fe25519::from(5u64).invert().unwrap();
         let x = Self::recover_even_x_from_y(y);
         AffinePoint { x, y }
     }
@@ -89,8 +89,8 @@ impl Ed25519Curve {
         let y = point.y;
         let x_sq = x.square();
         let y_sq = y.square();
-        let tmp = -x_sq + y_sq - Fp::ONE - D*x_sq*y_sq;
-        tmp == Fp::ZERO
+        let tmp = -x_sq + y_sq - Fe25519::ONE - D*x_sq*y_sq;
+        tmp == Fe25519::ZERO
     }
 
     pub fn add_points(p: &AffinePoint, q: &AffinePoint) -> AffinePoint {
@@ -100,8 +100,8 @@ impl Ed25519Curve {
         let y2 = q.y;
         let dx1x2y1y2 = D*x1*x2*y1*y2;
         AffinePoint {
-            x: (x1*y2 + x2*y1)*(Fp::ONE + dx1x2y1y2).invert().unwrap(),
-            y: (x1*x2 + y1*y2)*(Fp::ONE - dx1x2y1y2).invert().unwrap(),
+            x: (x1*y2 + x2*y1)*(Fe25519::ONE + dx1x2y1y2).invert().unwrap(),
+            y: (x1*x2 + y1*y2)*(Fe25519::ONE - dx1x2y1y2).invert().unwrap(),
         }
     }
 
@@ -130,9 +130,9 @@ mod tests {
         let mut rng = rand::thread_rng();
         let mut point = AffinePoint::default();
         loop {
-            let y = Fp::random(&mut rng);
+            let y = Fe25519::random(&mut rng);
             let y_sq = y.square();
-            let x_sq = (y_sq - Fp::ONE) * (D*y_sq + Fp::ONE).invert().unwrap();
+            let x_sq = (y_sq - Fe25519::ONE) * (D*y_sq + Fe25519::ONE).invert().unwrap();
 
             let (is_sqroot, x) = x_sq.sqrt_alt();
             if bool::from(is_sqroot) == true {

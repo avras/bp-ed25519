@@ -9,7 +9,7 @@ use crypto_bigint::{Encoding, Integer, U256, U512};
 use crypto_bigint::rand_core::RngCore;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub struct Fp(pub U256);
+pub struct Fe25519(pub(crate) U256);
 
 const MODULUS: U256 =
     U256::from_be_hex("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed");
@@ -19,158 +19,158 @@ const WIDE_MODULUS: U512 = U512::from_be_hex(concat!(
     "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
 ));
 
-const SQRT_MINUS_ONE: Fp =
-    Fp(U256::from_be_hex
+const SQRT_MINUS_ONE: Fe25519 =
+    Fe25519(U256::from_be_hex
     ("2b8324804fc1df0b2b4d00993dfbd7a72f431806ad2fe478c4ee1b274a0ea0b0"));
 
-pub const FIELD_MODULUS: Fp = Fp(MODULUS);
+pub const FIELD_MODULUS: Fe25519 = Fe25519(MODULUS);
 
 fn reduce(x: U512) -> U256 {
     U256::from_le_slice(&x.checked_rem(&WIDE_MODULUS).unwrap().to_le_bytes()[.. 32])
 }
 
-impl Add<Fp> for Fp {
-    type Output = Fp;
+impl Add<Fe25519> for Fe25519 {
+    type Output = Fe25519;
 
     fn add(self, rhs: Self) -> Self::Output {
         Self(U256::add_mod(&self.0, &rhs.0, &MODULUS))
     }
 }
-impl AddAssign<Fp> for Fp {
+impl AddAssign<Fe25519> for Fe25519 {
     fn add_assign(&mut self, rhs: Self) {
         self.0 = U256::add_mod(&self.0, &rhs.0, &MODULUS);
     }
 }
 
-impl<'a> Add<&'a Fp> for Fp {
-    type Output = Fp;
+impl<'a> Add<&'a Fe25519> for Fe25519 {
+    type Output = Fe25519;
 
-    fn add(self, rhs: &'a Fp) -> Self::Output {
+    fn add(self, rhs: &'a Fe25519) -> Self::Output {
         Self(U256::add_mod(&self.0, &rhs.0, &MODULUS))
     }
 }
 
-impl<'a> AddAssign<&'a Fp> for Fp {
-    fn add_assign(&mut self, rhs: &'a Fp) {
+impl<'a> AddAssign<&'a Fe25519> for Fe25519 {
+    fn add_assign(&mut self, rhs: &'a Fe25519) {
         self.0 = U256::add_mod(&self.0, &rhs.0, &MODULUS);
     }
 }
 
-impl Sub<Fp> for Fp {
-    type Output = Fp;
+impl Sub<Fe25519> for Fe25519 {
+    type Output = Fe25519;
 
     fn sub(self, rhs: Self) -> Self::Output {
         Self(U256::sub_mod(&self.0, &rhs.0, &MODULUS))
     }
 }
-impl SubAssign<Fp> for Fp {
+impl SubAssign<Fe25519> for Fe25519 {
     fn sub_assign(&mut self, rhs: Self) {
         self.0 = U256::sub_mod(&self.0, &rhs.0, &MODULUS);
     }
 }
 
-impl<'a> Sub<&'a Fp> for Fp {
-    type Output = Fp;
+impl<'a> Sub<&'a Fe25519> for Fe25519 {
+    type Output = Fe25519;
 
-    fn sub(self, rhs: &'a Fp) -> Self::Output {
+    fn sub(self, rhs: &'a Fe25519) -> Self::Output {
         Self(U256::sub_mod(&self.0, &rhs.0, &MODULUS))
     }
 }
 
-impl<'a> SubAssign<&'a Fp> for Fp {
-    fn sub_assign(&mut self, rhs: &'a Fp) {
+impl<'a> SubAssign<&'a Fe25519> for Fe25519 {
+    fn sub_assign(&mut self, rhs: &'a Fe25519) {
         self.0 = U256::sub_mod(&self.0, &rhs.0, &MODULUS);
     }
 }
 
-impl Mul<Fp> for Fp {
-    type Output = Fp;
+impl Mul<Fe25519> for Fe25519 {
+    type Output = Fe25519;
 
     fn mul(self, rhs: Self) -> Self::Output {
         let wide = U256::mul_wide(&self.0, &rhs.0);
         Self(reduce(U512::from((wide.0, wide.1))))
     }
 }
-impl MulAssign<Fp> for Fp {
+impl MulAssign<Fe25519> for Fe25519 {
     fn mul_assign(&mut self, rhs: Self) {
         let wide = U256::mul_wide(&self.0, &rhs.0);
         self.0 = reduce(U512::from((wide.0, wide.1)));
     }
 }
 
-impl<'a> Mul<&'a Fp> for Fp {
-    type Output = Fp;
+impl<'a> Mul<&'a Fe25519> for Fe25519 {
+    type Output = Fe25519;
 
-    fn mul(self, rhs: &'a Fp) -> Self::Output {
+    fn mul(self, rhs: &'a Fe25519) -> Self::Output {
         let wide = U256::mul_wide(&self.0, &rhs.0);
         Self(reduce(U512::from((wide.0, wide.1))))
     }
 }
 
-impl<'a> MulAssign<&'a Fp> for Fp {
-    fn mul_assign(&mut self, rhs: &'a Fp) {
+impl<'a> MulAssign<&'a Fe25519> for Fe25519 {
+    fn mul_assign(&mut self, rhs: &'a Fe25519) {
         let wide = U256::mul_wide(&self.0, &rhs.0);
         self.0 = reduce(U512::from((wide.0, wide.1)));
     }
 }
 
-impl Neg for Fp {
+impl Neg for Fe25519 {
     type Output = Self;
     fn neg(self) -> Self::Output {
         Self(self.0.neg_mod(&MODULUS))
     }
 }
   
-impl<'a> Neg for &'a Fp {
-    type Output = Fp;
+impl<'a> Neg for &'a Fe25519 {
+    type Output = Fe25519;
     fn neg(self) -> Self::Output {
         (*self).neg()
     }
 }
 
-impl ConstantTimeEq for Fp {
+impl ConstantTimeEq for Fe25519 {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.0.ct_eq(&other.0)
     }
 }
 
-impl ConditionallySelectable for Fp {
+impl ConditionallySelectable for Fe25519 {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-      Fp(U256::conditional_select(&a.0, &b.0, choice))
+      Fe25519(U256::conditional_select(&a.0, &b.0, choice))
     }
 }
 
-impl<T> Sum<T> for Fp
+impl<T> Sum<T> for Fe25519
 where
-    T: Borrow<Fp>
+    T: Borrow<Fe25519>
 {
     fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
-        iter.fold(Fp::ZERO, |acc, item| acc + item.borrow())
+        iter.fold(Fe25519::ZERO, |acc, item| acc + item.borrow())
     }
 }
 
-impl<T> Product<T> for Fp
+impl<T> Product<T> for Fe25519
 where
-    T: Borrow<Fp>
+    T: Borrow<Fe25519>
 {
     fn product<I: Iterator<Item = T>>(iter: I) -> Self {
-        iter.fold(Fp::ONE, |acc, item| acc * item.borrow())
+        iter.fold(Fe25519::ONE, |acc, item| acc * item.borrow())
     }
 }
 
-impl From<u64> for Fp {
+impl From<u64> for Fe25519 {
     fn from(value: u64) -> Self {
         Self(U256::from_u64(value))
     }
 }
 
-impl AsRef<[u64]> for Fp {
+impl AsRef<[u64]> for Fe25519 {
     fn as_ref(&self) -> &[u64] {
         self.0.as_words()
     }
 }
 
-impl Field for Fp {
+impl Field for Fe25519 {
     const ZERO: Self = Self(U256::ZERO);
 
     const ONE: Self = Self(U256::ONE);
@@ -190,7 +190,7 @@ impl Field for Fp {
     }
 
     fn invert(&self) -> CtOption<Self> {
-        const NEG_2: Fp = Self(MODULUS.saturating_sub(&U256::from_u8(2)));
+        const NEG_2: Fe25519 = Self(MODULUS.saturating_sub(&U256::from_u8(2)));
         CtOption::new(self.pow(NEG_2), !self.is_zero())
     }
 
@@ -204,8 +204,8 @@ impl Field for Fp {
         let v_pow6 = v_pow4 * v_sq;
         let uv7 = uv * v_pow6;
 
-        let five = Fp::from(5u64);
-        let one_by_eight = Fp::from(8u64).invert().unwrap();
+        let five = Fe25519::from(5u64);
+        let one_by_eight = Fe25519::from(8u64).invert().unwrap();
         let exponent = (FIELD_MODULUS - five)*one_by_eight;
         let beta = uv3 * uv7.pow(exponent); // candidate square root
         
@@ -223,7 +223,7 @@ impl Field for Fp {
     }
 }
 
-impl PrimeField for Fp {
+impl PrimeField for Fe25519 {
     type Repr = [u8; 32];
 
     fn from_repr(bytes: [u8; 32]) -> CtOption<Self> {
@@ -262,7 +262,7 @@ impl PrimeField for Fp {
 
 }
 
-impl PrimeFieldBits for Fp {
+impl PrimeFieldBits for Fe25519 {
     type ReprBits = [u8; 32];
   
     fn to_le_bits(&self) -> FieldBits<Self::ReprBits> {
@@ -281,39 +281,39 @@ mod tests {
 
     #[test]
     fn sanity_checks() {
-        let two = Fp::from(2u64);
+        let two = Fe25519::from(2u64);
         let four = two.mul(two);
-        let expected_four = Fp::from(4u64);
+        let expected_four = Fe25519::from(4u64);
 
         assert_eq!(four, expected_four);
-        assert_eq!(Fp::TWO_INV*two, Fp::ONE);
+        assert_eq!(Fe25519::TWO_INV*two, Fe25519::ONE);
         assert_eq!(two.pow(two), four);
         assert_eq!(two.square(), four);
 
         let two_inv = two.invert().unwrap();
-        assert_eq!(two_inv, Fp::TWO_INV);
+        assert_eq!(two_inv, Fe25519::TWO_INV);
     }
 
     #[test]
     fn check_params() {
-        assert_eq!(Fp::ROOT_OF_UNITY*Fp::ROOT_OF_UNITY_INV, Fp::ONE);
-        assert_eq!(Fp::MULTIPLICATIVE_GENERATOR.pow(Fp(MODULUS)-Fp::ONE), Fp::ONE);
+        assert_eq!(Fe25519::ROOT_OF_UNITY*Fe25519::ROOT_OF_UNITY_INV, Fe25519::ONE);
+        assert_eq!(Fe25519::MULTIPLICATIVE_GENERATOR.pow(Fe25519(MODULUS)-Fe25519::ONE), Fe25519::ONE);
         
-        let two = Fp::from(2u64);
-        let two_pow_s = two.pow(Fp::from(Fp::S as u64));
-        assert_eq!(Fp::ROOT_OF_UNITY.pow(two_pow_s), Fp::ONE);
+        let two = Fe25519::from(2u64);
+        let two_pow_s = two.pow(Fe25519::from(Fe25519::S as u64));
+        assert_eq!(Fe25519::ROOT_OF_UNITY.pow(two_pow_s), Fe25519::ONE);
 
-        let t = (Fp(MODULUS)-Fp::ONE) * (two_pow_s.invert().unwrap());
-        assert_eq!(Fp::DELTA.pow(t), Fp::ONE);
+        let t = (Fe25519(MODULUS)-Fe25519::ONE) * (two_pow_s.invert().unwrap());
+        assert_eq!(Fe25519::DELTA.pow(t), Fe25519::ONE);
     }
 
     #[test]
     fn check_add_sub() {
         let mut rng = rand::thread_rng();
-        let mut x = Fp::random(&mut rng);
-        let y = Fp::random(&mut rng);
+        let mut x = Fe25519::random(&mut rng);
+        let y = Fe25519::random(&mut rng);
         let neg_y = -y;
-        assert_eq!(y+neg_y, Fp::ZERO);
+        assert_eq!(y+neg_y, Fe25519::ZERO);
         assert_eq!(x+neg_y, x-y);
 
         let old_x = x;
@@ -322,8 +322,8 @@ mod tests {
         x += y;
         assert_eq!(x, old_x);
     
-        let a = [x, Fp::from(1u64), Fp::from(2u64), y];
-        assert_eq!(Fp::sum(a.iter()), x+y+Fp::from(3u64));
+        let a = [x, Fe25519::from(1u64), Fe25519::from(2u64), y];
+        assert_eq!(Fe25519::sum(a.iter()), x+y+Fe25519::from(3u64));
     
         let y_ref = &y;
         assert_eq!(x+y, x+y_ref);
@@ -336,16 +336,16 @@ mod tests {
     #[test]
     fn check_mul() {
         let mut rng = rand::thread_rng();
-        let mut x = Fp::random(&mut rng);
-        let y = Fp::random(&mut rng);
-        assert_eq!(x.invert().unwrap()*x, Fp::ONE);
+        let mut x = Fe25519::random(&mut rng);
+        let y = Fe25519::random(&mut rng);
+        assert_eq!(x.invert().unwrap()*x, Fe25519::ONE);
 
         let old_x = x;
         x *= y;
         assert_eq!(x*y.invert().unwrap(), old_x);
 
-        let a = [x, Fp::from(2u64), Fp::from(3u64), y];
-        assert_eq!(Fp::product(a.iter()), x*y*Fp::from(6u64));
+        let a = [x, Fe25519::from(2u64), Fe25519::from(3u64), y];
+        assert_eq!(Fe25519::product(a.iter()), x*y*Fe25519::from(6u64));
 
         let y_ref = &y;
         assert_eq!(x*y, x*y_ref);
@@ -356,9 +356,9 @@ mod tests {
     #[test]
     fn check_repr() {
         let mut rng = rand::thread_rng();
-        let x = Fp::random(&mut rng);
+        let x = Fe25519::random(&mut rng);
         let repr = x.to_repr();
-        let roundtrip_x = Fp::from_repr(repr).unwrap();
+        let roundtrip_x = Fe25519::from_repr(repr).unwrap();
 
         assert_eq!(x, roundtrip_x);
     }
@@ -366,44 +366,44 @@ mod tests {
     #[test]
     fn check_square_double() {
         let mut rng = rand::thread_rng();
-        let x = Fp::random(&mut rng);
+        let x = Fe25519::random(&mut rng);
         assert_eq!(x.square(), x*x);
         assert_eq!(x.double(), x+x);
-        let two = Fp::from(2u64);
+        let two = Fe25519::from(2u64);
         assert_eq!(x.double(), x*two);
     }
 
     #[test]
     fn check_cteq() {
-        let two = Fp::from(2u64);
-        let two_alt = Fp::ONE + Fp::ONE;
+        let two = Fe25519::from(2u64);
+        let two_alt = Fe25519::ONE + Fe25519::ONE;
         assert!(bool::from(two.ct_eq(&two_alt)));
     }
 
     #[test]
     fn check_conditonal_select() {
-        let one = Fp::ONE;
-        let two = Fp::from(2u64);
-        let x = Fp::conditional_select(&one, &two, Choice::from(0u8));
-        let y = Fp::conditional_select(&one, &two, Choice::from(1u8));
+        let one = Fe25519::ONE;
+        let two = Fe25519::from(2u64);
+        let x = Fe25519::conditional_select(&one, &two, Choice::from(0u8));
+        let y = Fe25519::conditional_select(&one, &two, Choice::from(1u8));
         assert_eq!(x, one);
         assert_eq!(y, two);
     }
 
     #[test]
     fn check_square_root() {
-        let two = Fp::from(2u64);
+        let two = Fe25519::from(2u64);
         assert!(bool::from(two.sqrt().is_none()));
 
         let four = two.square();
-        let (is_sq_root, sq_root) = Fp::sqrt_ratio(&four, &Fp::ONE);
+        let (is_sq_root, sq_root) = Fe25519::sqrt_ratio(&four, &Fe25519::ONE);
         assert!(bool::from(is_sq_root));
         assert!(sq_root == two || sq_root == -two);
 
         let mut rng = rand::thread_rng();
-        let x = Fp::random(&mut rng);
+        let x = Fe25519::random(&mut rng);
         let x_sq = x.square();
-        let (is_sq_root, sq_root) = Fp::sqrt_ratio(&x_sq, &Fp::ONE);
+        let (is_sq_root, sq_root) = Fe25519::sqrt_ratio(&x_sq, &Fe25519::ONE);
         assert!(bool::from(is_sq_root));
         assert!(sq_root == x || sq_root == -x);
         assert_eq!(sq_root.square(), x_sq);
