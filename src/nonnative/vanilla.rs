@@ -222,6 +222,31 @@ where
         diff.limbs[diff.len()-1] + carries[diff.len()-2] == F::ZERO
     }
 
+    fn calc_cubic_product_witness(
+        a: &LimbedInt<F>,
+        b: &LimbedInt<F>,
+        c: &LimbedInt<F>,
+    ) -> (LimbedInt<F>, LimbedInt<F>) {
+        let cubic_limbed_int = Self::calc_cubic_limbs(a, b, c);
+        let h_l = Self::fold_cubic_limbs(&cubic_limbed_int);
+
+        let one = BigUint::from(1u64);
+        let q: BigUint = (one.clone() << 255) - BigUint::from(19u64);
+        let h = BigUint::from(&h_l);
+        let r = h.clone().rem(&q);
+        assert_eq!(BigUint::from(&cubic_limbed_int).rem(&q), r);
+
+        let t = (h-r.clone()) / (q.clone());
+        assert!(t < one << 138);
+        
+        let mut t_l = Self::from(&t);
+        t_l.pad_limbs(3);
+        let mut r_l = Self::from(&r);
+        r_l.pad_limbs(4);
+
+        (t_l, r_l)
+    }
+
     fn verify_cubic_product(
         a: &LimbedInt<F>,
         b: &LimbedInt<F>,
@@ -330,17 +355,14 @@ where
         let x3 = r.x;
         let y3 = r.y;
 
-        let u = D*x1*x2;
-
         let d_l = LimbedInt::<F>::from(&D);
         let x1_l = LimbedInt::<F>::from(&x1);
         let x2_l = LimbedInt::<F>::from(&x2);
-        let u_l = LimbedInt::<F>::from(&u);
+        let (_, u_l) = LimbedInt::<F>::calc_cubic_product_witness(&d_l, &x1_l, &x2_l);
 
-        let v = u*y1*y2;
         let y1_l = LimbedInt::<F>::from(&y1);
         let y2_l = LimbedInt::<F>::from(&y2);
-        let v_l = LimbedInt::<F>::from(&v);
+        let (_, v_l) = LimbedInt::<F>::calc_cubic_product_witness(&u_l, &y1_l, &y2_l);
 
         let x3_l = LimbedInt::<F>::from(&x3);
         let y3_l = LimbedInt::<F>::from(&y3);
@@ -521,8 +543,7 @@ mod tests {
         let b_l = LimbedInt::<Fp>::from(&b_uint);
         let c_l = LimbedInt::<Fp>::from(&c_uint);
 
-        let r = (a_uint * b_uint * c_uint).rem(&q);
-        let r_l = LimbedInt::<Fp>::from(&r);
+        let (_, r_l) = LimbedInt::<Fp>::calc_cubic_product_witness(&a_l, &b_l, &c_l);
 
         assert!(LimbedInt::<Fp>::verify_cubic_product(&a_l, &b_l, &c_l, &r_l));
     }
@@ -552,10 +573,10 @@ mod tests {
         let p_l = LimbedAffinePoint::<Fp>::from(&p);
         let q_l = LimbedAffinePoint::<Fp>::from(&q);
         let r_l = LimbedAffinePoint::<Fp>::from(&r);
-        let u = D*p.x*q.x;
-        let v = u*p.y*q.y;
-        let u_l = LimbedInt::<Fp>::from(&u);
-        let v_l = LimbedInt::<Fp>::from(&v);
+
+        let d_l = LimbedInt::<Fp>::from(&D);
+        let (_, u_l) = LimbedInt::<Fp>::calc_cubic_product_witness(&d_l, &p_l.x, &q_l.x);
+        let (_, v_l) = LimbedInt::<Fp>::calc_cubic_product_witness(&u_l, &p_l.y, &q_l.y);
         assert!(LimbedAffinePoint::<Fp>::verify_ed25519_point_addition(&p_l, &q_l, &r_l, &u_l, &v_l));
     }
 
