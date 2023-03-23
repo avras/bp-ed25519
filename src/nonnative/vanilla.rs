@@ -1,9 +1,9 @@
-use std::ops::{Add, Sub};
+use std::ops::{Add, Sub, Rem};
 
 use ff::{PrimeField, PrimeFieldBits};
 use num_bigint::BigUint;
 use num_traits::{Zero, One};
-use crate::field::Fe25519;
+use crate::{field::Fe25519, curve::{AffinePoint, D}};
 
 
 
@@ -170,6 +170,19 @@ where
         prod
     }
 
+    fn fold_quadratic_limbs(f: &LimbedInt<F>) -> Self {
+        let mut h: LimbedInt<F> = LimbedInt::default();
+        assert_eq!(h.len(), 4);
+        assert_eq!(f.len(), 7);
+        let c = F::from(38u64);
+        h.limbs[0] = f.limbs[0] + c*f.limbs[4];
+        h.limbs[1] = f.limbs[1] + c*f.limbs[5];
+        h.limbs[2] = f.limbs[2] + c*f.limbs[6];
+        h.limbs[3] = f.limbs[3];
+
+        h
+    }
+
     fn check_difference_is_zero(a: LimbedInt<F>, b: LimbedInt<F>) -> bool {
         let diff = a - b;
         let mut carries: Vec<F> = vec![F::ZERO; diff.len()-1];
@@ -209,14 +222,144 @@ where
         diff.limbs[diff.len()-1] + carries[diff.len()-2] == F::ZERO
     }
 
+    fn verify_cubic_product(
+        a: &LimbedInt<F>,
+        b: &LimbedInt<F>,
+        c: &LimbedInt<F>,
+        prod: &LimbedInt<F>,
+    ) -> bool {
+        let cubic_limbed_int = Self::calc_cubic_limbs(a, b, c);
+        let h_l = Self::fold_cubic_limbs(&cubic_limbed_int);
+
+        let one = BigUint::from(1u64);
+        let q: BigUint = (one.clone() << 255) - BigUint::from(19u64);
+        let h = BigUint::from(&h_l);
+        let r = h.clone().rem(&q);
+        assert_eq!(BigUint::from(&cubic_limbed_int).rem(&q), r);
+
+        let t = (h-r.clone()) / (q.clone());
+        assert!(t < one << 138);
+        
+        let q_l = Self::from(&q);
+        let mut t_l = Self::from(&t);
+        t_l.pad_limbs(3);
+
+        let tq_l = Self::calc_quadratic_limbs(&t_l, &q_l);
+        let tq_plus_r_l = tq_l + prod.clone();
+        
+        Self::check_difference_is_zero(h_l, tq_plus_r_l)
+    }
+
+    fn verify_x_coordinate_quadratic_is_zero(
+        x1: &LimbedInt<F>,
+        x2: &LimbedInt<F>,
+        y1: &LimbedInt<F>,
+        y2: &LimbedInt<F>,
+        x3: &LimbedInt<F>,
+        v: &LimbedInt<F>,
+    ) -> bool {
+
+        let one = BigUint::from(1u64);
+        let q: BigUint = (one.clone() << 255) - BigUint::from(19u64);
+        let q_l = Self::from(&q);
+        let mut q70_l = Self::default();
+        for i in 0..q_l.len() {
+            q70_l.limbs[i] = q_l.limbs[i] * F::from_u128(1 << 70);
+        }
+
+        let x1y2_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(x1, y2));
+        let x2y1_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(x2, y1));
+        let x3v_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(x3, v));
+        let g_l = x1y2_l + x2y1_l - x3.clone() - x3v_l  + q70_l;
+
+        let g = BigUint::from(&g_l);
+        assert!(g.clone().rem(q.clone()).is_zero());
+        let t = g.clone() / q.clone();
+        assert!(t < (one << 72));
+        assert!(g == t.clone()*q.clone());
+
+        let t_l = Self::from(&t);
+        let tq_l = Self::calc_quadratic_limbs(&t_l, &q_l);
+        assert!(t*q == BigUint::from(&tq_l));
+        Self::check_difference_is_zero(g_l, tq_l)
+    }
+
+    fn verify_y_coordinate_quadratic_is_zero(
+        x1: &LimbedInt<F>,
+        x2: &LimbedInt<F>,
+        y1: &LimbedInt<F>,
+        y2: &LimbedInt<F>,
+        y3: &LimbedInt<F>,
+        v: &LimbedInt<F>,
+    ) -> bool {
+
+        let one = BigUint::from(1u64);
+        let q: BigUint = (one.clone() << 255) - BigUint::from(19u64);
+        let q_l = Self::from(&q);
+        let mut q70_l = Self::default();
+        for i in 0..q_l.len() {
+            q70_l.limbs[i] = q_l.limbs[i] * F::from_u128(1 << 70);
+        }
+
+        let x1x2_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(x1, x2));
+        let y1y2_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(y1, y2));
+        let y3v_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(y3, v));
+        let g_l = x1x2_l + y1y2_l + y3v_l - y3.clone()  + q70_l;
+
+        let g = BigUint::from(&g_l);
+        assert!(g.clone().rem(q.clone()).is_zero());
+        let t = g.clone() / q.clone();
+        assert!(t < (one << 72));
+        assert!(g == t.clone()*q.clone());
+
+        let t_l = Self::from(&t);
+        let tq_l = Self::calc_quadratic_limbs(&t_l, &q_l);
+        assert!(t*q == BigUint::from(&tq_l));
+        Self::check_difference_is_zero(g_l, tq_l)
+    }
+
+    fn verify_ed25519_point_addition(
+        p: &AffinePoint,
+        q: &AffinePoint,
+        r: &AffinePoint,
+    ) -> bool {
+        let x1 = p.x;
+        let y1 = p.y;
+        let x2 = q.x;
+        let y2 = q.y;
+        let x3 = r.x;
+        let y3 = r.y;
+
+        let u = D*x1*x2;
+
+        let d_l = LimbedInt::<F>::from(&D);
+        let x1_l = LimbedInt::<F>::from(&x1);
+        let x2_l = LimbedInt::<F>::from(&x2);
+        let u_l = LimbedInt::<F>::from(&u);
+
+        let v = u*y1*y2;
+        let y1_l = LimbedInt::<F>::from(&y1);
+        let y2_l = LimbedInt::<F>::from(&y2);
+        let v_l = LimbedInt::<F>::from(&v);
+
+        let x3_l = LimbedInt::<F>::from(&x3);
+        let y3_l = LimbedInt::<F>::from(&y3);
+        
+        Self::verify_cubic_product(&d_l, &x1_l, &x2_l, &u_l)
+             & Self::verify_cubic_product(&u_l, &y1_l, &y2_l, &v_l)
+             & Self::verify_x_coordinate_quadratic_is_zero(&x1_l, &x2_l, &y1_l, &y2_l, &x3_l, &v_l)
+             & Self::verify_y_coordinate_quadratic_is_zero(&x1_l, &x2_l, &y1_l, &y2_l, &y3_l, &v_l)
+
+    }
 }
 
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Rem;
+    use crate::curve::Ed25519Curve;
 
     use super::*;
+    use crypto_bigint::{U256, Random};
     use ff::Field;
     use num_bigint::RandBigInt;
     use pasta_curves::Fp;
@@ -323,24 +466,22 @@ mod tests {
         let b_l = LimbedInt::<Fp>::from(&b_uint);
         let c_l = LimbedInt::<Fp>::from(&c_uint);
 
-        let cubic_limbed_int = LimbedInt::<Fp>::calc_cubic_limbs(&a_l, &b_l, &c_l);
-        let h_l = LimbedInt::<Fp>::fold_cubic_limbs(&cubic_limbed_int);
-
-        let h = BigUint::from(&h_l);
-        let r = h.clone().rem(&q);
-        assert_eq!(BigUint::from(&cubic_limbed_int).rem(&q), r);
-
-        let t = (h-r.clone()) / (q.clone());
-        assert!(t < one << 138);
-        
-        let q_l = LimbedInt::<Fp>::from(&q);
+        let r = (a_uint * b_uint * c_uint).rem(&q);
         let r_l = LimbedInt::<Fp>::from(&r);
-        let mut t_l = LimbedInt::<Fp>::from(&t);
-        t_l.pad_limbs(3);
 
-        let tq_l = LimbedInt::<Fp>::calc_quadratic_limbs(&t_l, &q_l);
-        let tq_plus_r_l = tq_l + r_l;
-        assert!(LimbedInt::<Fp>::check_difference_is_zero(h_l, tq_plus_r_l));
+        assert!(LimbedInt::<Fp>::verify_cubic_product(&a_l, &b_l, &c_l, &r_l));
+    }
+
+    #[test]
+    fn limbed_point_addition_verification() {
+        let b = Ed25519Curve::basepoint();
+        let mut rng = rand::thread_rng();
+        let scalar = U256::random(&mut rng);
+        let p = Ed25519Curve::scalar_multiplication(&b, &scalar);
+        let scalar = U256::random(&mut rng);
+        let q = Ed25519Curve::scalar_multiplication(&b, &scalar);
+        let r = p.add(q);
+        assert!(LimbedInt::<Fp>::verify_ed25519_point_addition(&p, &q, &r));
     }
 
 
