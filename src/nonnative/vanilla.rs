@@ -9,7 +9,7 @@ use crate::{field::Fe25519, curve::{AffinePoint, D}};
 
 #[derive(Debug, Clone)]
 pub struct LimbedInt<F: PrimeField + PrimeFieldBits> {
-    limbs: Vec<F>,
+    pub(crate) limbs: Vec<F>,
     // limb_width: u32,
 }
 
@@ -115,18 +115,18 @@ where
     //     Self { limbs }
     // }
     
-    fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.limbs.len()
     }
 
-    fn pad_limbs(&mut self, padded_length: usize) {
+    pub(crate) fn pad_limbs(&mut self, padded_length: usize) {
         assert!(self.len() <= padded_length);
         for _ in self.len()..padded_length {
             self.limbs.push(F::zero());
         }
     } 
 
-    fn calc_cubic_limbs(a: &LimbedInt<F>, b: &LimbedInt<F>, c: &LimbedInt<F>) -> Self {
+    pub(crate) fn calc_cubic_limbs(a: &LimbedInt<F>, b: &LimbedInt<F>, c: &LimbedInt<F>) -> Self {
         assert_eq!(a.len(), b.len());
         assert_eq!(b.len(), c.len());
         let num_limbs = a.len();
@@ -143,7 +143,7 @@ where
         prod
     }
 
-    fn fold_cubic_limbs(g: &LimbedInt<F>) -> Self {
+    pub(crate) fn fold_cubic_limbs(g: &LimbedInt<F>) -> Self {
         let mut h: LimbedInt<F> = LimbedInt::default();
         assert_eq!(h.len(), 4);
         assert_eq!(g.len(), 10);
@@ -157,7 +157,7 @@ where
         h
     }
 
-    fn calc_quadratic_limbs(a: &LimbedInt<F>, b: &LimbedInt<F>) -> Self {
+    pub(crate) fn calc_quadratic_limbs(a: &LimbedInt<F>, b: &LimbedInt<F>) -> Self {
         let num_limbs_in_quadratic = a.len() + b.len() - 1;
 
         let mut prod: LimbedInt<F> = Self { limbs: vec![F::zero(); num_limbs_in_quadratic] };
@@ -169,7 +169,7 @@ where
         prod
     }
 
-    fn fold_quadratic_limbs(f: &LimbedInt<F>) -> Self {
+    pub(crate) fn fold_quadratic_limbs(f: &LimbedInt<F>) -> Self {
         let mut h: LimbedInt<F> = LimbedInt::default();
         assert_eq!(h.len(), 4);
         assert_eq!(f.len(), 7);
@@ -221,7 +221,7 @@ where
         diff.limbs[diff.len()-1] + carries[diff.len()-2] == F::zero()
     }
 
-    fn calc_cubic_product_witness(
+    pub(crate) fn calc_cubic_product_witness(
         a: &LimbedInt<F>,
         b: &LimbedInt<F>,
         c: &LimbedInt<F>,

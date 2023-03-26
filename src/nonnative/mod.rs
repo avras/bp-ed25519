@@ -1,1 +1,2 @@
 mod vanilla;
+mod circuit;
