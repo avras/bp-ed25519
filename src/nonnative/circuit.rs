@@ -640,17 +640,18 @@ where
 pub struct AllocatedAffinePoint<F: PrimeField + PrimeFieldBits> {
     x: AllocatedLimbedInt<F>,
     y: AllocatedLimbedInt<F>,
+    value: AffinePoint,
 }
 
 impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
     pub fn alloc_affine_point<CS>(
         cs: &mut CS,
-        point: AffinePoint,
+        value: AffinePoint,
     ) -> Result<Self, SynthesisError>
     where
         CS: ConstraintSystem<F>,
     {
-        let limbed_affine_point = LimbedAffinePoint::<F>::from(&point);
+        let limbed_affine_point = LimbedAffinePoint::<F>::from(&value);
         let x = AllocatedLimbedInt::<F>::alloc_from_limbed_int(
             &mut cs.namespace(|| "x coordinate"),
             limbed_affine_point.x,
@@ -661,9 +662,9 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
             limbed_affine_point.y,
             4
         )?;
-        Ok(Self { x, y })
+        Ok(Self { x, y, value })
     }
-    
+
     fn verify_ed25519_point_addition<CS>(
         cs: &mut CS,
         p: &Self,
@@ -707,6 +708,31 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         )?;
         Ok(())
     }
+    
+    pub fn ed25519_point_addition<CS>(
+        cs: &mut CS,
+        p: &Self,
+        q: &Self,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>,
+    {
+        let sum_value = p.value + q.value;
+        let sum = Self::alloc_affine_point(
+            &mut cs.namespace(|| "allocate sum"),
+            sum_value,
+        )?;
+
+        Self::verify_ed25519_point_addition(
+            &mut cs.namespace(|| "verify point addition"),
+            p,
+            q,
+            &sum,
+        )?;
+
+        Ok(sum)
+    }
+
 }
 
 #[cfg(test)]
@@ -1146,7 +1172,7 @@ mod tests {
         let p = Ed25519Curve::scalar_multiplication(&b, &scalar);
         let scalar = U256::random(&mut rng);
         let q = Ed25519Curve::scalar_multiplication(&b, &scalar);
-        let r = p.add(q);
+        let sum_expected_value = p.add(q);
 
         let mut cs = TestConstraintSystem::<Fp>::new();
 
@@ -1164,20 +1190,15 @@ mod tests {
         assert!(q_alloc.is_ok());
         let q_al = q_alloc.unwrap();
 
-        let r_alloc = AllocatedAffinePoint::alloc_affine_point(
-            &mut cs.namespace(|| "alloc point r"),
-            r,
-        );
-        assert!(r_alloc.is_ok());
-        let r_al = r_alloc.unwrap();
-
-        let res = AllocatedAffinePoint::verify_ed25519_point_addition(
-            &mut cs.namespace(|| "verify point addition"),
+        let sum_alloc = AllocatedAffinePoint::ed25519_point_addition(
+            &mut cs.namespace(|| "adding p and q"),
             &p_al,
             &q_al,
-            &r_al,
         );
-        assert!(res.is_ok());
+        assert!(sum_alloc.is_ok());
+        let sum_al = sum_alloc.unwrap();
+
+        assert_eq!(sum_expected_value, sum_al.value);
 
         assert!(cs.is_satisfied());
         println!("Num constraints = {:?}", cs.num_constraints());
