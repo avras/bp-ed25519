@@ -128,6 +128,13 @@ where
         }
     }
 }
+pub enum AllocatedOrConstantLimbedInt<F>
+where
+    F: PrimeField + PrimeFieldBits
+{
+    Allocated(AllocatedLimbedInt<F>),
+    Constant(LimbedInt<F>)
+}
 
 impl<F> AllocatedLimbedInt<F>
 where
@@ -258,7 +265,7 @@ where
         Ok(product)
     }
     
-    pub fn alloc_cubic<CS: ConstraintSystem<F>>(
+    pub fn alloc_cubic_product_3var<CS: ConstraintSystem<F>>(
         &self,
         cs: &mut CS,
         b: &Self,
@@ -286,6 +293,32 @@ where
             &c
         );
         abc
+    }
+
+    pub fn alloc_cubic_product_2var1const<CS: ConstraintSystem<F>>(
+        &self,
+        cs: &mut CS,
+        b: &Self,
+        c: &LimbedInt<F>,
+    ) -> Result<AllocatedLimbedInt<F>, SynthesisError> {
+        if self.value.is_none() || b.value.is_none() {
+            return Err(SynthesisError::Unsatisfiable);
+        }
+
+        let a_l = self.clone().value.unwrap();
+        let b_l = b.clone().value.unwrap();
+        if self.limbs.len() != a_l.len()
+            || b_l.limbs.len() != b_l.len()
+            || c.limbs.len() != c.len() {
+            return Err(SynthesisError::Unsatisfiable);
+        }
+
+        let ab = self.alloc_product(
+            &mut cs.namespace(|| "a times b"),
+            &b
+        )?;
+        let abc = ab * c;
+        Ok(abc)
     }
 
     pub fn fold_quadratic_limbs(
@@ -432,16 +465,27 @@ where
         cs: &mut CS,
         a: &Self,
         b: &Self,
-        c: &Self,
+        c: &AllocatedOrConstantLimbedInt<F>,
     ) -> Result<Self, SynthesisError> {
-        let abc = a.alloc_cubic(
-            &mut cs.namespace(|| format!("allocate unreduced cubic product")),
-            b,
-            c,
-        ).unwrap();
+
+        let abc = match c {
+            AllocatedOrConstantLimbedInt::Allocated(allocated_c) => a.alloc_cubic_product_3var(
+                &mut cs.namespace(|| format!("allocate unreduced cubic product")),
+                b,
+                allocated_c,
+            ).unwrap(),
+            AllocatedOrConstantLimbedInt::Constant(constant_c) => a.alloc_cubic_product_2var1const(
+                &mut cs.namespace(|| format!("allocate unreduced cubic product")),
+                b,
+                constant_c,
+            ).unwrap(),
+        };
         let a_l = a.clone().value.unwrap();
         let b_l = b.clone().value.unwrap();
-        let c_l = c.clone().value.unwrap();
+        let c_l = match c {
+            AllocatedOrConstantLimbedInt::Allocated(allocated_c) => allocated_c.clone().value.unwrap(),
+            AllocatedOrConstantLimbedInt::Constant(constant_c) => constant_c.clone(),
+        };
 
         let one = BigUint::from(1u64);
         let q: BigUint = (one.clone() << 255) - BigUint::from(19u64);
@@ -636,25 +680,20 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         let x3_l = &r.x;
         let y3_l = &r.y;
 
-        // TODO: d_l need not be allocated in the circuit.
-        let d_l = AllocatedLimbedInt::alloc_from_limbed_int(
-            &mut cs.namespace(|| "allocated d"),
-            LimbedInt::<F>::from(&D),
-            4
-        )?;
+        let d_l = LimbedInt::<F>::from(&D);
 
         let u_l = AllocatedLimbedInt::reduce_cubic_product(
             &mut cs.namespace(|| "allocate d*x1*x2 mod q"),
-            &d_l,
             &x1_l,
             &x2_l,
+            &AllocatedOrConstantLimbedInt::Constant(d_l),
         )?;
         
         let v_l = AllocatedLimbedInt::reduce_cubic_product(
             &mut cs.namespace(|| "allocate u*y1*y2 mod q"),
             &u_l,
             &y1_l,
-            &y2_l,
+            &AllocatedOrConstantLimbedInt::<F>::Allocated(y2_l.clone()),
         )?;
         
         
@@ -845,7 +884,7 @@ mod tests {
         let b = b.unwrap();
         let c = c.unwrap();
 
-        let prod = a.alloc_cubic(
+        let prod = a.alloc_cubic_product_3var(
             &mut cs.namespace(|| "product"),
             &b,
             &c,
@@ -944,7 +983,7 @@ mod tests {
         let b = b.unwrap();
         let c = c.unwrap();
 
-        let prod = a.alloc_cubic(
+        let prod = a.alloc_cubic_product_3var(
             &mut cs.namespace(|| "product"),
             &b,
             &c,
@@ -1079,7 +1118,7 @@ mod tests {
             &mut cs.namespace(|| "verify cubic product reduced mod q"),
             &a,
             &b,
-            &c,
+            &AllocatedOrConstantLimbedInt::Allocated(c),
         );
         assert!(r_calc.is_ok());
         let r_calc = r_calc.unwrap();
