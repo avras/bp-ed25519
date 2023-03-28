@@ -2,7 +2,7 @@ use std::ops::{Add, Sub, Mul, Rem};
 use bellperson::{ConstraintSystem, SynthesisError, LinearCombination, Variable};
 use ff::{PrimeField, PrimeFieldBits};
 use num_bigint::BigUint;
-use num_traits::Zero;
+use num_traits::{Zero, ToPrimitive};
 
 use crate::{nonnative::vanilla::LimbedInt, curve::{AffinePoint, D}};
 
@@ -21,6 +21,72 @@ where
         scaled_lc = scaled_lc + (scalar*coeff, var);
     }
     scaled_lc
+}
+
+fn range_check_lc<F, CS>(
+    cs: &mut CS,
+    lc_input: &LinearCombination<F>,
+    lc_value: F,
+    num_bits: usize,
+) -> Result<(), SynthesisError>
+where
+    F: PrimeField + PrimeFieldBits,
+    CS: ConstraintSystem<F>,
+{
+    let value_bits = lc_value.to_le_bits();
+
+    // Allocate all but the first bit.
+    let bits: Vec<Variable> = (1..num_bits)
+        .map(|i| {
+            cs.alloc(
+                || format!("bit {i}"),
+                || {
+                    let r = if value_bits[i] {
+                        F::one()
+                    } else {
+                        F::zero()
+                    };
+                    Ok(r)
+                },
+            )
+        })
+        .collect::<Result<_, _>>()?;
+
+    for (i, v) in bits.iter().enumerate() {
+        cs.enforce(
+            || format!("bit {i} is bit"),
+            |lc| lc + *v,
+            |lc| lc + CS::one() - *v,
+            |lc| lc,
+        )
+    }
+
+    // Last bit
+    cs.enforce(
+        || format!("last bit of variable is a bit"),
+        |mut lc| {
+            let mut f = F::one();
+            lc = lc + lc_input;
+            for v in bits.iter() {
+                f = f.double();
+                lc = lc - (f, *v);
+            }
+            lc
+        },
+        |mut lc| {
+            lc = lc + CS::one();
+            let mut f = F::one();
+            lc = lc - lc_input;
+            for v in bits.iter() {
+                f = f.double();
+                lc = lc + (f, *v);
+            }
+            lc
+        },
+        |lc| lc,
+    );
+
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -211,61 +277,14 @@ where
         assert_eq!(self.limbs.len(), limbed_int.len());
 
         for i in 0..limbed_int.len() {
-            let limb_bits = limbed_int.limbs[i].to_le_bits();
-
-
-            // Allocate all but the first bit.
-            let bits: Vec<Variable> = (1..num_bits)
-                .map(|j| {
-                    cs.alloc(
-                        || format!("limb {i} bit {j}"),
-                        || {
-                            let r = if limb_bits[j] {
-                                F::one()
-                            } else {
-                                F::zero()
-                            };
-                            Ok(r)
-                        },
-                    )
-                })
-                .collect::<Result<_, _>>()?;
-
-            for (j, v) in bits.iter().enumerate() {
-                cs.enforce(
-                    || format!("limb {i} bit {j} is bit"),
-                    |lc| lc + *v,
-                    |lc| lc + CS::one() - *v,
-                    |lc| lc,
-                )
-            }
-
-            // Last bit
-            cs.enforce(
-                || format!("last bit of limb {i} is a bit"),
-                |mut lc| {
-                    let mut f = F::one();
-                    lc = lc + &self.limbs[i];
-                    for v in bits.iter() {
-                        f = f.double();
-                        lc = lc - (f, *v);
-                    }
-                    lc
-                },
-                |mut lc| {
-                    lc = lc + CS::one();
-                    let mut f = F::one();
-                    lc = lc - &self.limbs[i];
-                    for v in bits.iter() {
-                        f = f.double();
-                        lc = lc + (f, *v);
-                    }
-                    lc
-                },
-                |lc| lc,
-            );
-
+            range_check_lc(
+                &mut cs.namespace(|| format!("Range check limb {i}")),
+                &self.limbs[i],
+                limbed_int.limbs[i],
+                num_bits
+            )?;
         }
+
         Ok(())
     }
 
@@ -451,6 +470,8 @@ where
         self,
         cs: &mut CS,
         other: &Self,
+        max_limb_bitwidth: usize,
+        base_bitwidth: usize,
     ) -> Result<(), SynthesisError> {
         let diff = self - other;
         if diff.value.is_none() {
@@ -460,8 +481,12 @@ where
         let diff_len = diff.limbs.len();
         let mut carries: Vec<F> = vec![F::zero(); diff_len-1];
         let mut carry_variables: Vec<Variable> = vec![];
-        let exp64 = BigUint::from(64u64);
-        let base = F::from(2u64).pow_vartime(exp64.to_u64_digits());
+        let exp = BigUint::from(base_bitwidth as u64);
+        let base = F::from(2u64).pow_vartime(exp.to_u64_digits());
+
+        assert!(max_limb_bitwidth - base_bitwidth + 1 > 0);
+        let offset = F::from(2u64).pow_vartime(&[(max_limb_bitwidth-base_bitwidth+1) as u64]);
+        let carry_plus_offset_range_bits = max_limb_bitwidth - base_bitwidth + 2;
 
         for i in 0..diff_len-1 {
             if i == 0 {
@@ -484,6 +509,13 @@ where
                 );
                 assert!(cv.is_ok());
                 carry_variables.push(cv.unwrap());
+
+                range_check_lc(
+                    &mut cs.namespace(|| format!("Range check carry {i} plus offset")),
+                    &(LinearCombination::from_coeff(CS::one(), offset) + carry_variables[i]),
+                    carries[i]+offset,
+                    carry_plus_offset_range_bits,
+                )?;
 
                 cs.enforce(
                     || format!("Enforce carry constraint {i}"),
@@ -512,6 +544,13 @@ where
                 );
                 assert!(cv.is_ok());
                 carry_variables.push(cv.unwrap());
+
+                range_check_lc(
+                    &mut cs.namespace(|| format!("Range check carry {i} plus offset")),
+                    &(LinearCombination::from_coeff(CS::one(), offset) + carry_variables[i]),
+                    carries[i]+offset,
+                    carry_plus_offset_range_bits,
+                )?;
 
                 cs.enforce(
                     || format!("Enforce carry constraint {i}"),
@@ -583,7 +622,9 @@ where
 
         h_l.check_difference_is_zero(
             &mut cs.namespace(|| "checking difference is zero"),
-            &tq_plus_r
+            &tq_plus_r,
+            205,
+            64,
         )?;
         Ok(r)
     }
@@ -643,6 +684,8 @@ where
         g_al.check_difference_is_zero(
             &mut cs.namespace(|| "checking difference is zero"),
             &tq_al,
+            138,
+            64,
         )
     }
 
@@ -701,6 +744,8 @@ where
         g_al.check_difference_is_zero(
             &mut cs.namespace(|| "checking difference is zero"),
             &tq_al,
+            138,
+            64,
         )
     }
 }
@@ -815,6 +860,65 @@ mod tests {
     use pasta_curves::Fp;
     use num_bigint::{RandBigInt, BigUint};
 
+    #[test]
+    fn range_check_linear_combination() {
+        let mut cs = TestConstraintSystem::<Fp>::new();
+        let mut rng = rand::thread_rng();
+        let a_num_bits = 64usize;
+        let a_uint = rng.gen_biguint(a_num_bits as u64);
+        // let b_uint = rng.gen_biguint(192u64);
+        let a_repr_init: Vec<u8> = a_uint.to_bytes_le();
+        
+        let mut a_repr: [u8; 32] = [0u8; 32];
+        for i in 0..a_repr_init.len(){
+            a_repr[i] = a_repr_init[i];
+        }
+
+        let a_scalar = Fp::from_repr(a_repr);
+        assert!(bool::from(a_scalar.is_some()));
+        let a = a_scalar.unwrap();
+
+        let a_var = cs.alloc(|| "a variable", || Ok(a));
+        assert!(a_var.is_ok());
+        let a_var = a_var.unwrap();
+        let res = range_check_lc(
+            &mut cs.namespace(|| "Check range of a"),
+            &LinearCombination::from_variable(a_var),
+            a,
+            a_num_bits,
+        );
+        assert!(res.is_ok());
+
+        let b_num_bits = 143usize;
+        let b_uint = rng.gen_biguint(b_num_bits as u64);
+        let b_repr_init: Vec<u8> = b_uint.to_bytes_le();
+        
+        let mut b_repr: [u8; 32] = [0u8; 32];
+        for i in 0..b_repr_init.len(){
+            b_repr[i] = b_repr_init[i];
+        }
+
+        let b_scalar = Fp::from_repr(b_repr);
+        assert!(bool::from(b_scalar.is_some()));
+        let b = b_scalar.unwrap();
+
+        let b_var = cs.alloc(|| "b variable", || Ok(b));
+        assert!(b_var.is_ok());
+        let b_var = b_var.unwrap();
+        let res = range_check_lc(
+            &mut cs.namespace(|| "Check range of b"),
+            &LinearCombination::from_variable(b_var),
+            b,
+            b_num_bits,
+        );
+        assert!(res.is_ok());
+
+
+        assert!(cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+    }
+    
     #[test]
     fn alloc_limbed_sum() {
         let mut cs = TestConstraintSystem::<Fp>::new();
@@ -1191,7 +1295,9 @@ mod tests {
 
         let res = ab_folded.check_difference_is_zero(
             &mut cs.namespace(|| "check difference is zero"),
-            &tq_plus_r
+            &tq_plus_r,
+            138,
+            64,
         );
         assert!(res.is_ok());
 
