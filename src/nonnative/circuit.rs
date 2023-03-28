@@ -199,6 +199,75 @@ where
             value: Some(sum_values),
         })
     }
+    
+    // From fits_in_bits of bellperson-nonnative
+    pub fn range_check_limbs<CS: ConstraintSystem<F>>(
+        &self,
+        cs: &mut CS,
+        num_bits: usize,
+    ) -> Result<(), SynthesisError> {
+        assert!(self.value.is_some());
+        let limbed_int = self.clone().value.unwrap();
+        assert_eq!(self.limbs.len(), limbed_int.len());
+
+        for i in 0..limbed_int.len() {
+            let limb_bits = limbed_int.limbs[i].to_le_bits();
+
+
+            // Allocate all but the first bit.
+            let bits: Vec<Variable> = (1..num_bits)
+                .map(|j| {
+                    cs.alloc(
+                        || format!("limb {i} bit {j}"),
+                        || {
+                            let r = if limb_bits[j] {
+                                F::one()
+                            } else {
+                                F::zero()
+                            };
+                            Ok(r)
+                        },
+                    )
+                })
+                .collect::<Result<_, _>>()?;
+
+            for (j, v) in bits.iter().enumerate() {
+                cs.enforce(
+                    || format!("limb {i} bit {j} is bit"),
+                    |lc| lc + *v,
+                    |lc| lc + CS::one() - *v,
+                    |lc| lc,
+                )
+            }
+
+            // Last bit
+            cs.enforce(
+                || format!("last bit of limb {i} is a bit"),
+                |mut lc| {
+                    let mut f = F::one();
+                    lc = lc + &self.limbs[i];
+                    for v in bits.iter() {
+                        f = f.double();
+                        lc = lc - (f, *v);
+                    }
+                    lc
+                },
+                |mut lc| {
+                    lc = lc + CS::one();
+                    let mut f = F::one();
+                    lc = lc - &self.limbs[i];
+                    for v in bits.iter() {
+                        f = f.double();
+                        lc = lc + (f, *v);
+                    }
+                    lc
+                },
+                |lc| lc,
+            );
+
+        }
+        Ok(())
+    }
 
     pub fn alloc_product<CS: ConstraintSystem<F>>(
         &self,
@@ -836,6 +905,42 @@ mod tests {
         assert!(cs.is_satisfied());
         println!("Num constraints = {:?}", cs.num_constraints());
         println!("Num inputs = {:?}", cs.num_inputs());
+    }
+    
+    #[test]
+    fn alloc_limbed_range_check() {
+        let mut cs = TestConstraintSystem::<Fp>::new();
+        let mut rng = rand::thread_rng();
+        let a_uint = rng.gen_biguint(256u64);
+        let a_l = LimbedInt::<Fp>::from(&a_uint);
+
+        let a = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc a"),
+            a_l,
+            4
+        );
+        assert!(a.is_ok());
+        let a = a.unwrap();
+
+        let res = a.range_check_limbs(
+            &mut cs.namespace(|| "range check limbs"),
+            64,
+        );
+        assert!(res.is_ok());
+
+        assert!(cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+        let res = a.range_check_limbs(
+            &mut cs.namespace(|| "range check limbs with fewer bits"),
+            63,
+        );
+        assert!(res.is_ok());
+        assert!(!cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
     }
 
     #[test]
