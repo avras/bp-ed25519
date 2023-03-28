@@ -1,8 +1,8 @@
 use std::ops::{Add, Sub, Mul, Rem};
-use bellperson::{ConstraintSystem, SynthesisError, LinearCombination, Variable};
+use bellperson::{ConstraintSystem, SynthesisError, LinearCombination, Variable, gadgets::boolean::AllocatedBit};
 use ff::{PrimeField, PrimeFieldBits};
 use num_bigint::BigUint;
-use num_traits::{Zero, ToPrimitive};
+use num_traits::Zero;
 
 use crate::{nonnative::vanilla::LimbedInt, curve::{AffinePoint, D}};
 
@@ -23,6 +23,7 @@ where
     scaled_lc
 }
 
+// From fits_in_bits of bellperson-nonnative
 fn range_check_lc<F, CS>(
     cs: &mut CS,
     lc_input: &LinearCombination<F>,
@@ -266,7 +267,6 @@ where
         })
     }
     
-    // From fits_in_bits of bellperson-nonnative
     pub fn range_check_limbs<CS: ConstraintSystem<F>>(
         &self,
         cs: &mut CS,
@@ -284,6 +284,94 @@ where
                 num_bits
             )?;
         }
+
+        Ok(())
+    }
+
+    pub fn check_base_field_membership<CS: ConstraintSystem<F>>(
+        &self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
+        // Less than 4 limbs is trivially in base field
+        assert_eq!(self.limbs.len(), 4);
+        let limbed_int = self.clone().value.unwrap();
+        assert_eq!(self.limbs.len(), limbed_int.len());
+
+        let max_ls_limb_value: F = F::from(u64::MAX);
+        let max_ms_limb_value: F = F::from((1u64 << 63) - 1);
+
+        // range check the limbs, most significant limb occupies 63 bits
+        for i in 0..4 {
+            let num_bits = if i == 3 {
+                63
+            } else {
+                64
+            };
+
+            range_check_lc(
+                &mut cs.namespace(|| format!("range check limb {i}")),
+                &self.limbs[i],
+                limbed_int.limbs[i],
+                num_bits,
+            )?;
+        }
+
+        let equality_bits: Vec<AllocatedBit> = (1..4)
+            .map( |i| {
+                let max_limb_value = if i == 3 {
+                    max_ms_limb_value
+                } else {
+                    max_ls_limb_value
+                };
+
+                let bit = AllocatedBit::alloc(
+                    cs.namespace(|| format!("check if limb {i} equals max value")),
+                    Some(limbed_int.limbs[i] == max_limb_value),
+                );
+                bit.unwrap()
+            })
+            .collect();
+
+        let limbs12_maxed = AllocatedBit::and(
+            cs.namespace(|| "limbs 1 and 2 are maximum possible values"),
+            &equality_bits[0],
+            &equality_bits[1],
+        )?;
+        let limbs123_maxed = AllocatedBit::and(
+            cs.namespace(|| "limbs 1, 2 and 3 are maximum possible values"),
+            &limbs12_maxed,
+            &equality_bits[2],
+        )?;
+
+        let c = F::from(19u64);
+        let ls_limb_value = if limbs123_maxed.get_value().unwrap() {
+            // Add 18 to the least significant limb. It may or may not overflow the 64 bits
+            limbed_int.limbs[0] + c
+        } else {
+            F::zero()
+        };
+        
+        let ls_limb_modified = cs.alloc(
+            || "modified limb value",
+            || Ok(ls_limb_value)
+        )?;
+
+        // If all the most significant limbs are equal to their max values, then
+        // ls_limb_modified == self.limbs[0] + c
+        // Otherwise, ls_limb_modified == 0
+        cs.enforce(
+            || "check modified limb value is correct",
+            |lc| lc + &self.limbs[0] + &LinearCombination::from_coeff(CS::one(), c),
+            |lc| lc + limbs123_maxed.get_variable(),
+            |lc| lc + ls_limb_modified,
+        );
+
+        range_check_lc(
+            &mut cs.namespace(|| "range check modified LS limb"),
+            &LinearCombination::from_variable(ls_limb_modified),
+            ls_limb_value,
+            64,
+        )?;
 
         Ok(())
     }
@@ -609,11 +697,18 @@ where
             t_l,
             3
         )?;
+        t.range_check_limbs(
+            &mut cs.namespace(|| "range check cubic product quotient"),
+            64,
+        )?;
 
         let r = Self::alloc_from_limbed_int(
             &mut cs.namespace(|| "cubic product remainder"),
             r_l,
             4
+        )?;
+        r.check_base_field_membership(
+            &mut cs.namespace(|| "check cubic product remainder is in field"),
         )?;
 
         let tq = t * &q_l;
@@ -679,6 +774,11 @@ where
             t_l,
             2,
         )?;
+        t_al.range_check_limbs(
+            &mut cs.namespace(|| "range check quotient"),
+            64,
+        )?;
+
         let tq_al = t_al * &q_l;
 
         g_al.check_difference_is_zero(
@@ -739,6 +839,11 @@ where
             t_l,
             2,
         )?;
+        t_al.range_check_limbs(
+            &mut cs.namespace(|| "range check quotient"),
+            64,
+        )?;
+
         let tq_al = t_al * &q_l;
 
         g_al.check_difference_is_zero(
@@ -835,6 +940,13 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         let sum = Self::alloc_affine_point(
             &mut cs.namespace(|| "allocate sum"),
             sum_value,
+        )?;
+
+        sum.x.check_base_field_membership(
+            &mut cs.namespace(|| "check x coordinate of sum is in base field")
+        )?;
+        sum.y.check_base_field_membership(
+            &mut cs.namespace(|| "check y coordinate of sum is in base field")
         )?;
 
         Self::verify_ed25519_point_addition(
@@ -1041,6 +1153,74 @@ mod tests {
             63,
         );
         assert!(res.is_ok());
+        assert!(!cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+    }
+
+    #[test]
+    fn alloc_limbed_field_membership() {
+        let mut cs = TestConstraintSystem::<Fp>::new();
+        let zero = BigUint::from(0u64);
+        let one = BigUint::from(1u64);
+        let q_uint: BigUint = (one.clone() << 255) - BigUint::from(19u64);
+        let mut rng = rand::thread_rng();
+        let a_uint = rng.gen_biguint_range(&zero, &q_uint);
+        let a_l = LimbedInt::<Fp>::from(&a_uint);
+
+        let a = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc a"),
+            a_l,
+            4
+        );
+        assert!(a.is_ok());
+        let a = a.unwrap();
+
+        let res = a.check_base_field_membership(
+            &mut cs.namespace(|| "check field membership"),
+        );
+        assert!(res.is_ok());
+
+        assert!(cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+        let b_uint = q_uint.clone() - one;
+        let b_l = LimbedInt::<Fp>::from(&b_uint);
+
+        let b = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc b"),
+            b_l,
+            4
+        );
+        assert!(b.is_ok());
+        let b = b.unwrap();
+
+        let res = b.check_base_field_membership(
+            &mut cs.namespace(|| "check field membership of q-1"),
+        );
+        assert!(res.is_ok());
+
+        assert!(cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+        let q_l = LimbedInt::<Fp>::from(&q_uint);
+
+        let q_al = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc q"),
+            q_l,
+            4
+        );
+        assert!(q_al.is_ok());
+        let q_al = q_al.unwrap();
+
+        let res = q_al.check_base_field_membership(
+            &mut cs.namespace(|| "check field non-membership of q"),
+        );
+        assert!(res.is_ok());
+
         assert!(!cs.is_satisfied());
         println!("Num constraints = {:?}", cs.num_constraints());
         println!("Num inputs = {:?}", cs.num_inputs());
