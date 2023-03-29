@@ -151,8 +151,8 @@ A degree 6 product of 7-limbed terms with 38 bits per limb will need 261 bits to
 While it is possible to use 38-bit limbs to safely calculate the unreduced representation of a degree 6 product, the circuit logic can be quite complex. It seems prudent to try a simpler approach first, even if it is inefficient in terms of arithmetic circuit size.
 
 \newpage
-\subsection{An Approach using Four 64-bit Limbs}%
-\label{subsec:an_approach_using_four_64_bit_limbs}
+\section{An Approach using Four 64-bit Limbs}%
+\label{sec:an_approach_using_four_64_bit_limbs}
 Unreduced representations of cubic products using four 64-bit limbs can be safely calculated in fields with capacity 253 bits. The bitwidth growth of this case is illustrated in Table \ref{tab:limb64}.
 \begin{table}[h]
   \centering
@@ -182,8 +182,8 @@ We propose to try the following approach. It is inspired by the \texttt{circom-e
     \end{align*}
 \end{itemize}
 
-\section{Reducing a Cubic Product}%
-\label{sec:reducing_a_cubic_product}
+\subsection{Reducing a Cubic Product}%
+\label{subsec:reducing_a_cubic_product}
 Let $a,b,c$ be three elements in $\mathbb{F}_q$ available in their reduced representations.
 \begin{align*}
   a = \sum^{3}_{i=0} a_i 2^{64i}, \ \ \ \ b = \sum^{3}_{i=0} b_i 2^{64i}, \ \ \ \ c = \sum^{3}_{i=0} c_i 2^{64i}.
@@ -245,16 +245,40 @@ where
 \end{align*}
 We note the following:
 \begin{itemize}
-  \item Each of the $g_i$'s occupy a maximum of 192 bits.
+  \item Each of the $g_i$'s occupy a maximum of 195 bits.
   \item The numbers 38 and 1444 occupy 6 bits and 11 bits respectively.
-  \item $1444g_8$ occupies a maximum of 203 bits. This implies $h_0$ can occupy a maximum of 205 bits.
-  \item By the same argument, $h_1$ occupies a maximum of 205 bits.
-  \item $38g_6$ occupies a maximum of 198 bits. This implies $h_2$ can occupy a maximum of 199 bits.
-  \item By the same argument, $h_3$ occupies a maximum of 199 bits.
+  \item $h_0 = g_0 + 38 g_4 + 1444 g_8$ can occupy a maximum of 205 bits by the following observations.
+    \begin{itemize}
+      \item $g_0$ occupies a maximum of 192 bits
+      \item $g_4$ occupies a maximum of 195 bits
+      \item $38g_4$ occupies a maximum of 201 bits
+      \item $g_8$ occupies a maximum of 193 bits
+      \item $1444g_8$ occupies a maximum of 204 bits
+    \end{itemize}
+  \item $h_1 = g_1 + 38 g_5 + 1444 g_9$ can occupy a maximum of 204 bits by the following observations.
+    \begin{itemize}
+      \item $g_1$ occupies a maximum of 193 bits
+      \item $g_5$ occupies a maximum of 195 bits
+      \item $38g_5$ occupies a maximum of 201 bits
+      \item $g_9$ occupies a maximum of 192 bits
+      \item $1444g_9$ occupies a maximum of 203 bits
+    \end{itemize}
+  \item $h_2 = g_2 + 38 g_6$ can occupy a maximum of 202 bits by the following observations.
+    \begin{itemize}
+      \item $g_2$ occupies a maximum of 194 bits
+      \item $g_6$ occupies a maximum of 195 bits
+      \item $38g_6$ occupies a maximum of 201 bits
+    \end{itemize}
+  \item $h_3 = g_3 + 38 g_7$ can occupy a maximum of 201 bits by the following observations.
+    \begin{itemize}
+      \item $g_3$ occupies a maximum of 196 bits
+      \item $g_7$ occupies a maximum of 194 bits
+      \item $38g_7$ occupies a maximum of 200 bits
+    \end{itemize}
   \item So all the $h_i$'s can fit in $\mathbb{F}_n$ limbs.
   \item The maximum value of $g$ is bounded by
     \begin{align*}
-      2^{205} - 1 + \left(2^{205} - 1\right) 2^{64}+ \left( 2^{199}-1 \right)2^{128}+ \left( 2^{199}-1 \right)2^{192} < 2^{205} + 2^{269} + 2^{327} + 2^{391} < 2^{392}
+      2^{205} - 1 + \left(2^{204} - 1\right) 2^{64}+ \left( 2^{202}-1 \right)2^{128}+ \left( 2^{201}-1 \right)2^{192} < 2^{205} + 2^{268} + 2^{330} + 2^{393} < 2^{394}
     \end{align*}
   \item So the reduced representation of $g$ will have at most seven 64-bit limbs. Let $g_0', g_1',\ldots,g_6'$ denote these limbs.
    \begin{align*}
@@ -272,7 +296,7 @@ for some quotient $t \in \mathbb{F}_q$. Here
 \begin{align*}
   r = r_0 + r_1 2^{64} + r_2 2^{128} + r_3 2^{192} \ \ \ \ \ \text{ where } r_i \in \{0,1,\ldots,2^{64}-1\}.
 \end{align*}
-As $q > 2^{254}$, the maximum value of $t$ required to satisfy this equation is $2^{392-254} = 2^{138}$. So the quotient requires only three 64-bit limbs in its reduced representation.
+As $q > 2^{254}$, the maximum value of $t$ required to satisfy this equation is $2^{394-254} = 2^{140}$. So the quotient requires only three 64-bit limbs in its reduced representation.
 \begin{align*}
   t = t_0 + t_1 2^{64} + t_2 2^{128}\ \ \ \ \ \text{ where } t_i \in \{0,1,\ldots,2^{64}-1\}.
 \end{align*}
@@ -304,7 +328,7 @@ We could reduce the number of range checks by checking that $g-tq-r$ equals zero
   \item Let $y_3 = \frac{y_2+h_3-t_0q_3-t_1q_2-t_2q_1-r_3}{2^{64}}$. This represents the carry into the $2^{256}$ limb.
   \item $y_3-t_1q_3-t_2q_2$ contains the next 64 least significant bits of $g-tq-r$, i.e.~bits 256 to 319. These bits must also all be zero. So $y_3-t_1q_3-t_2q_2$ must be a multiple of $2^{64}$
   \item Let $y_4 = \frac{y_3-t_1q_3-t_2q_2}{2^{64}}$. This represents the carry into the $2^{320}$ limb.
-  \item $y_4-t_2q_3$ contains the remaining 72 least significant bits of $g-tq-r$, i.e.~bits 320 to 391. Recall that $g$ is bounded by $2^{392}$. These bits must also all be zero. So $y_4-t_2q_3$ \textit{must be zero}.
+  \item $y_4-t_2q_3$ contains the remaining 74 least significant bits of $g-tq-r$, i.e.~bits 320 to 393. Recall that $g$ is bounded by $2^{394}$. These bits must also all be zero. So $y_4-t_2q_3$ \textit{must be zero}.
 \end{enumerate}
 
 Note that the limbs of $g-tq-r$ can have negative values, i.e. they can experience underflows during the subtraction operation. We use the convention that $x \in \mathbb{F}_n$ is \textit{negative} if $x > \frac{n-1}{2}$.  For example, $h_0-t_0q_0-r_0$ can be a negative multiple of $2^{64}$.
@@ -333,9 +357,9 @@ The bitwidths of the terms $h_i, q_i, t_i, r_i$ will be known due to range check
 \end{itemize}
 To simplify the arithmetic circuit logic (at least initially), the range checks on all the $y_i$'s can be for the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. Later the range check on $y_0$ can be for the smaller range $\{-2^{141}+1,\ldots,2^{141}-1\}$ and on $y_4$ can be for the smaller range $\{-2^{79}+1,\ldots,2^{79}-1\}$.
 
-\section{Reducing a Quadratic Expression}%
-\label{sec:reducing_a_quadratic_expression}
-In Section \ref{sec:reducing_a_cubic_product}, the cubic products being reduced had positive values due to the approach chosen in Section \ref{subsec:an_approach_using_four_64_bit_limbs}. Recall our convention that $x \in \mathbb{F}_n$ is positive if $x \le \frac{n-1}{2}$. Even after the folding shown in Section \ref{sec:reducing_a_cubic_product}, the values remain positive. Consequently, the quotient $t$ could be bounded in magnitude by $2^{138}$ and represented using three 64-bit limbs.
+\subsection{Reducing a Quadratic Expression}%
+\label{subsec:reducing_a_quadratic_expression}
+In Section \ref{subsec:reducing_a_cubic_product}, the cubic products being reduced had positive values due to the approach chosen in Section \ref{sec:an_approach_using_four_64_bit_limbs}. Recall our convention that $x \in \mathbb{F}_n$ is positive if $x \le \frac{n-1}{2}$. Even after the folding shown in Section \ref{subsec:reducing_a_cubic_product}, the values remain positive. Consequently, the quotient $t$ could be bounded in magnitude by $2^{138}$ and represented using three 64-bit limbs.
 
 On the other hand, the quadratic expressions we plan to verify can have negative values as they have the form
 \begin{align*}
@@ -463,5 +487,35 @@ The carries $y_0,y_1,y_2,y_3$ will be provided as non-deterministic advice to th
   \item $y_2+g_3-t_0q_3-t_1q_2$ is in the range $\{-2^{139}+1,\ldots, 2^{139}-1\}$. Since $y_3 = \frac{y_2+g_3-t_0q_3-t_1q_2}{2^{64}}$, we can check that $y_3$ is in the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_3 + 2^{75}$ is in the range $\{0,1,\ldots,2^{76}-1\}$.
 \end{itemize}
 To simplify the arithmetic circuit logic (at least initially), the range checks on all the $y_i$'s can be for the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. Later the range check on $y_0$ can be for the smaller range $\{-2^{74}+1,\ldots,2^{74}-1\}$.
+
+\section{An Approach using Eight 32-bit Limbs}%
+\label{sec:an_approach_using_eight_32_bit_limbs}
+Unreduced representations of sextic products using eight 32-bit limbs can be safely calculated in fields with capacity 253 bits. The bitwidth growth of this case is illustrated in Table \ref{tab:limb32}.
+\begin{table}[h]
+  \centering
+  \begin{tabular}{c|c|c|c|c|c|c}
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $z_1$ & $z_2$ & 32 & 32 & 8 & 8 & 67 \\ \hline
+    $z_1z_2$ & $z_3$ & 67 & 32 & 15 & 8 & 103 \\ \hline
+    $z_1z_2z_3$ & $z_4$ & 103 & 32 & 22 & 8 & 140 \\ \hline
+    $z_1z_2z_3z_4$ & $z_5$ & 140 & 32 & 29 & 8 & 177 \\ \hline
+    $z_1z_2z_3z_4z_5$ & $z_6$ & 177 & 32 & 36 & 8 & 215 \\ \hline
+  \end{tabular}
+  \caption{Bitwidth growth for products of terms with 8 limbs of 32 bits each}
+  \label{tab:limb32}
+\end{table}
+
+Recall that the affine point addition verification equations can be written as
+\begin{align}
+  x_3(1+dx_1x_2y_1y_2) &= x_1y_2 + x_2y_1,\\
+  y_3(1-dx_1x_2y_1y_2) &= x_1x_2 + y_1y_2.
+  \label{eqn:additionAffineVerification}
+\end{align}
+We propose to try the following approach. It is inspired by the \texttt{circom-ecdsa} approach for verifying secp256k1 point addition. Given the affine points $(x_1, y_1), (x_2, y_2), (x_3, y_3)$, check that the following sextic equations hold.
+  \begin{align*}
+    dx_1x_2x_3y_1y_2 + x_3 - x_1y_2 - x_2y_1 &= 0,\\
+    dx_1x_2y_1y_2y_3 - y_3 + x_1x_2 + y_1y_2 &= 0.
+  \end{align*}
+
 
 \end{document}
