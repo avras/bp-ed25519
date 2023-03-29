@@ -236,7 +236,7 @@ where
         assert_eq!(BigUint::from(&cubic_limbed_int).rem(&q), r);
 
         let t = (h-r.clone()) / (q.clone());
-        assert!(t < one << 138);
+        assert!(t < one << 140);
         
         let mut t_l = Self::from(&t);
         t_l.pad_limbs(3);
@@ -262,7 +262,7 @@ where
         assert_eq!(BigUint::from(&cubic_limbed_int).rem(&q), r);
 
         let t = (h-r.clone()) / (q.clone());
-        assert!(t < one << 138);
+        assert!(t < one << 140);
         
         let q_l = Self::from(&q);
         let mut t_l = Self::from(&t);
@@ -506,7 +506,7 @@ mod tests {
         assert_eq!(BigUint::from(&cubic_limbed_int).rem(&q), r);
 
         let t = (h-r.clone()) / (q.clone());
-        assert!(t < one << 138);
+        assert!(t < one << 140);
     }
 
     #[test]

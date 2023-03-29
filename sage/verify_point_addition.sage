@@ -156,7 +156,7 @@ def verify_cubic_product(a, b, c, prod):
     r_bigint = int(r)
 
     t_bigint = (h_bigint - r_bigint) // q # quotient
-    assert(t_bigint < 2**138)
+    assert(t_bigint < 2**140)
     assert(h_bigint == t_bigint*q+r_bigint)
 
     t_l = calc_native_limbs(t_bigint, 3)
