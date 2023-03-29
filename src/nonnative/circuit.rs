@@ -1148,7 +1148,16 @@ mod tests {
         println!("Num constraints = {:?}", cs.num_constraints());
         println!("Num inputs = {:?}", cs.num_inputs());
 
-        let res = a.range_check_limbs(
+        let b_uint: BigUint = BigUint::from(u64::MAX);
+        let b_l = LimbedInt::<Fp>::from(&b_uint);
+        let b = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc b"),
+            b_l,
+            1
+        );
+        assert!(b.is_ok());
+        let b = b.unwrap();
+        let res = b.range_check_limbs(
             &mut cs.namespace(|| "range check limbs with fewer bits"),
             63,
         );
