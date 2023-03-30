@@ -359,7 +359,7 @@ To simplify the arithmetic circuit logic (at least initially), the range checks 
 
 \subsection{Reducing a Quadratic Expression}%
 \label{subsec:reducing_a_quadratic_expression}
-In Section \ref{subsec:reducing_a_cubic_product}, the cubic products being reduced had positive values due to the approach chosen in Section \ref{sec:an_approach_using_four_64_bit_limbs}. Recall our convention that $x \in \mathbb{F}_n$ is positive if $x \le \frac{n-1}{2}$. Even after the folding shown in Section \ref{subsec:reducing_a_cubic_product}, the values remain positive. Consequently, the quotient $t$ could be bounded in magnitude by $2^{138}$ and represented using three 64-bit limbs.
+In Section \ref{subsec:reducing_a_cubic_product}, the cubic products being reduced had positive values due to the approach chosen in Section \ref{sec:an_approach_using_four_64_bit_limbs}. Recall our convention that $x \in \mathbb{F}_n$ is positive if $x \le \frac{n-1}{2}$. Even after the folding shown in Section \ref{subsec:reducing_a_cubic_product}, the values remain positive. Consequently, the quotient $t$ could be bounded in magnitude by $2^{140}$ and represented using three 64-bit limbs.
 
 On the other hand, the quadratic expressions we plan to verify can have negative values as they have the form
 \begin{align*}
@@ -490,7 +490,7 @@ To simplify the arithmetic circuit logic (at least initially), the range checks 
 
 \section{An Approach using Eight 32-bit Limbs}%
 \label{sec:an_approach_using_eight_32_bit_limbs}
-Unreduced representations of sextic products using eight 32-bit limbs can be safely calculated in fields with capacity 253 bits. The bitwidth growth of this case is illustrated in Table \ref{tab:limb32}.
+Unreduced representations of sextic products using eight 32-bit limbs can be safely calculated in fields with capacity 253 bits. The bitwidth growth of this case is illustrated in Table \ref{tab:limb32}. But we also have to account for the bitwidth growth due to the folding operations. These will be considered in the subsequent sections.
 \begin{table}[h]
   \centering
   \begin{tabular}{c|c|c|c|c|c|c}
@@ -509,13 +509,353 @@ Recall that the affine point addition verification equations can be written as
 \begin{align}
   x_3(1+dx_1x_2y_1y_2) &= x_1y_2 + x_2y_1,\\
   y_3(1-dx_1x_2y_1y_2) &= x_1x_2 + y_1y_2.
-  \label{eqn:additionAffineVerification}
+  \label{eqn:additionAffineVerificationLimbs8}
 \end{align}
-We propose to try the following approach. It is inspired by the \texttt{circom-ecdsa} approach for verifying secp256k1 point addition. Given the affine points $(x_1, y_1), (x_2, y_2), (x_3, y_3)$, check that the following sextic equations hold.
-  \begin{align*}
-    dx_1x_2x_3y_1y_2 + x_3 - x_1y_2 - x_2y_1 &= 0,\\
-    dx_1x_2y_1y_2y_3 - y_3 + x_1x_2 + y_1y_2 &= 0.
-  \end{align*}
+We propose to try the following approach. Given the affine points $(x_1, y_1), (x_2, y_2), (x_3, y_3)$, check that the following sextic equations hold.
+\begin{align}
+  dx_1x_2x_3y_1y_2 + x_3 - x_1y_2 - x_2y_1 &= 0 \bmod q,\label{eqn1}\\
+  dx_1x_2y_1y_2y_3 - y_3 + x_1x_2 + y_1y_2 &= 0 \bmod q.\label{eqn2}
+\end{align}
 
+In (\ref{eqn2}), $y_3$ is the only term with a negative sign. So it is the only term that can reduce the sum. Our goal is to have a non-negative value in the unreduced representation of the LHS in (\ref{eqn2}) after folding. We can rewrite this equation as
+\begin{align}
+  dx_1x_2y_1y_2y_3 + (q - y_3) + x_1x_2 + y_1y_2 &= 0 \bmod q,\label{eqn3}
+\end{align}
+and ensure that the terms in the LHS sum to a non-negative value.
+
+In (\ref{eqn1}), the term $-x_1y_2-x_2y_1$ can contribute negative values. We can rewrite this equation as
+\begin{align}
+  dx_1x_2x_3y_1y_2 + x_3 +(q^2 - x_1y_2) + (q^2 - x_2y_1) &= 0 \bmod q,\label{eqn4}
+\end{align}
+and ensure that the terms in the LHS sum to a non-negative value. But it turns out that we do not need to add $2q^2$ to the LHS. We can add a much smaller number. As shown in the next section, once we fold products like $x_1y_2$ their magnitude is bounded by $2^{292}$. As $q > 2^{254}$, $2^{38}q - x_1y_2$ is guaranteed to be non-negative. So we can rewrite (\ref{eqn1}) as 
+\begin{align}
+  dx_1x_2x_3y_1y_2 + x_3 + 2^{39}q - x_1y_2 - x_2y_1  &= 0 \bmod q,\label{eqn5}
+\end{align}
+and ensure that the terms in the LHS sum to a non-negative value.
+
+\subsection{Folding a Quadratic Product}%
+\label{subsec:folding_a_quadratic_product}
+Let $a,b$ be two elements in $\mathbb{F}_q$ available in their reduced representations.
+\begin{align*}
+  a = \sum^{7}_{i=0} a_i 2^{32i}, \ \ \ \ b = \sum^{7}_{i=0} b_i 2^{32i},
+\end{align*}
+where $a_i, b_i \in \{0,1,\ldots,2^{32}-1\}$.
+Let $f = ab$. Then we have $f = \sum_{i=0}^{14} f_i 2^{32i}$ where
+\begin{align*}
+  f_0 & = a_0b_0,\\
+  f_1 & = a_0b_1 + a_1b_0,\\
+  f_2 & = a_0b_2 + a_1b_1 + a_2b_0,\\
+  f_3 & = a_0b_3 + a_1b_2 + a_2b_1 + a_3b_0,\\
+  f_4 & = a_0b_4 + a_1b_3 + a_2b_2 + a_3b_1 + a_4b_0,\\
+  f_5 & = a_0b_5 + a_1b_4 + a_2b_3 + a_3b_2 + a_4b_1 + a_5b_0,\\
+  f_6 & = a_0b_6 + a_1b_5 + a_2b_4 + a_3b_3 + a_4b_2 + a_5b_1 + a_6b_0,\\
+  f_7 & = a_0b_7 + a_1b_6 + a_2b_5 + a_3b_4 + a_4b_3 + a_5b_2 + a_6b_1 + a_7b_0,\\
+  f_8 & = a_1b_7 + a_2b_6 + a_3b_5 + a_4b_4 + a_5b_3 + a_6b_2 + a_7b_1,\\
+  f_9 & = a_2b_7 + a_3b_6 + a_4b_5 + a_5b_4 + a_6b_3 + a_7b_2,\\
+  f_{10} & = a_3b_7 + a_4b_6 + a_5b_5 + a_6b_4 + a_7b_3,\\
+  f_{11} & = a_4b_7 + a_5b_6 + a_6b_5 + a_7b_4,\\
+  f_{12} & = a_5b_7 + a_6b_6 + a_7b_5,\\
+  f_{13} & = a_6b_7 + a_7b_6,\\
+  f_{14} & = a_7b_7.
+\end{align*}
+
+Since $q = 2^{255}-19$, we have $2^{256} = 38 \bmod q$. We can rewrite $f$ (modulo $q$) as
+\begin{align*}
+  f  = \sum^{14}_{i=0} f_i 2^{32i} &= f_0 + f_1 2^{32} + f_2 2^{64} + f_3 2^{96} + f_4 2^{128} +   f_5 2^{160} + f_6 2^{192}+ f_7 2^{224}\\
+   &\ \ + f_8 2^{256} + f_9 2^{288} + f_{10} 2^{320} + f_{11} 2^{352} +   f_{12} 2^{384} + f_{13} 2^{416}+ f_{14} 2^{448}\\
+   & = f_0 + f_1 2^{32} + f_2 2^{64} + f_3 2^{96} + f_4 2^{128} +   f_5 2^{160} + f_6 2^{192}+ f_7 2^{224}\\
+   &\ \ + 2^{256} \left( f_8 + f_9 2^{32} + f_{10} 2^{64} + f_{11} 2^{96} +   f_{12} 2^{128} + f_{13} 2^{160}+ f_{14} 2^{192} \right)\\
+   & = f_0 + 38f_8 + 2^{32}\left(f_1 + 38 f_9\right)  +  2^{64}\left( f_2 + 38 f_{10} \right) + 2^{96}\left( f_3 + 38 f_{11} \right)\\
+   &\ \ +  2^{128}\left( f_4 + 38 f_{12}\right) + 2^{160}\left( f_5 + 38 f_{13} \right) + 2^{192}\left( f_6 + 38 f_{14} \right) + f_7 2^{224}\\
+   & = h_0 + h_1 2^{32} + h_2 2^{64} + h_3 2^{96} + h_4 2^{128} +   h_5 2^{160} + h_6 2^{192}+ h_7 2^{224},
+\end{align*}
+where
+\begin{align*}
+  h_0 & = f_0 + 38 f_8,\\
+  h_1 & = f_1 + 38 f_9,\\
+  h_2 & = f_2 + 38 f_{10},\\
+  h_3 & = f_3 + 38 f_{11},\\
+  h_4 & = f_4 + 38 f_{12},\\
+  h_5 & = f_5 + 38 f_{13},\\
+  h_6 & = f_6 + 38 f_{14},\\
+  h_7 & = f_7.\\
+\end{align*}
+We note the following:
+\begin{itemize}
+  \item Each of the $f_i$'s occupy a maximum of 67 bits.
+  \item The number 38 occupies 6 bits.
+  \item $h_0 = f_0 + 38 f_8$ can occupy a maximum of 73 bits by the following observations.
+    \begin{itemize}
+      \item $f_0$ occupies a maximum of 64 bits
+      \item $f_8$ occupies a maximum of 66 bits, being a sum of seven 64-bit products
+      \item $38f_4$ occupies a maximum of 72 bits
+    \end{itemize}
+  \item $h_1 = f_1 + 38 f_9$ can occupy a maximum of 73 bits by the following observations.
+    \begin{itemize}
+      \item $f_1$ occupies a maximum of 65 bits
+      \item $f_9$ occupies a maximum of 66 bits, being a sum of six 64-bit products
+      \item $38f_9$ occupies a maximum of 72 bits
+    \end{itemize}
+  \item $h_2 = f_2 + 38 f_{10}$ can occupy a maximum of 73 bits by the following observations.
+    \begin{itemize}
+      \item $f_2$ occupies a maximum of 65 bits
+      \item $f_{10}$ occupies a maximum of 66 bits, being a sum of five 64-bit products
+      \item $38f_{10}$ occupies a maximum of 72 bits
+    \end{itemize}
+  \item $h_3 = f_3 + 38 f_{11}$ can occupy a maximum of 73 bits by the following observations.
+    \begin{itemize}
+      \item $f_3$ occupies a maximum of 66 bits
+      \item $f_{11}$ occupies a maximum of 66 bits, being a sum of four 64-bit products
+      \item $38f_{11}$ occupies a maximum of 72 bits
+    \end{itemize}
+  \item $h_4 = f_4 + 38 f_{12}$ can occupy a maximum of 72 bits by the following observations.
+    \begin{itemize}
+      \item $f_4$ occupies a maximum of 66 bits
+      \item $f_{12}$ occupies a maximum of 65 bits, being a sum of three 64-bit products
+      \item $38f_{12}$ occupies a maximum of 71 bits
+    \end{itemize}
+  \item $h_5 = f_5 + 38 f_{13}$ can occupy a maximum of 72 bits by the following observations.
+    \begin{itemize}
+      \item $f_5$ occupies a maximum of 66 bits
+      \item $f_{13}$ occupies a maximum of 65 bits, being a sum of two 64-bit products
+      \item $38f_{13}$ occupies a maximum of 71 bits
+    \end{itemize}
+  \item $h_6 = f_6 + 38 f_{14}$ can occupy a maximum of 71 bits by the following observations.
+    \begin{itemize}
+      \item $f_6$ occupies a maximum of 66 bits
+      \item $f_{14}$ occupies a maximum of 64 bits
+      \item $38f_{14}$ occupies a maximum of 70 bits
+    \end{itemize}
+  \item $h_7 = f_7$ can occupy a maximum of 67 bits, being the sum of eight 64-bit products
+  \item So all the $h_i$'s can fit in $\mathbb{F}_n$ limbs.
+  \item The maximum value of $f$ is bounded by
+    \begin{align*}
+   &  h_0 + h_1 2^{32} + h_2 2^{64} + h_3 2^{96} + h_4 2^{128} +   h_5 2^{160} + h_6 2^{192}+ h_7 2^{224} \\
+   & \le 2^{73}-1 + \left( 2^{73}-1 \right) 2^{32} + \left( 2^{73}-1 \right) 2^{64} + \left( 2^{73}-1 \right) 2^{96} + \left( 2^{72}-1 \right)2^{128} +  \left( 2^{72}-1 \right) 2^{160} \\
+   & \ \ + \left( 2^{71}-1 \right) 2^{192}+ \left( 2^{67}-1 \right) 2^{224}\\
+   & < 2^{73} + 2^{105} + 2^{137} + 2^{169} + 2^{200} + 2^{232} + 2^{263} + 2^{291}\\
+   & < 2^{292}
+    \end{align*}
+\end{itemize}
+
+
+\subsection{Folding a Sextic Product}%
+\label{subsec:folding_a_sextic_product}
+Let $a,b,c,d,e,f$ be six elements in $\mathbb{F}_q$ available in their reduced representations.
+\begin{align*}
+  a = \sum^{7}_{i=0} a_i 2^{32i}, \ \ \ b = \sum^{7}_{i=0} b_i 2^{32i},\ \ \ 
+  c = \sum^{7}_{i=0} c_i 2^{32i}, \ \ \ d = \sum^{7}_{i=0} d_i 2^{32i},\ \ \ 
+  e = \sum^{7}_{i=0} e_i 2^{32i}, \ \ \ f = \sum^{7}_{i=0} f_i 2^{32i},
+\end{align*}
+where $a_i, b_i, c_i, d_i, e_i, f_i \in \{0,1,\ldots,2^{32}-1\}$.
+Let $g = abcdef$. Then we have $g = \sum_{l=0}^{42} g_l 2^{32l}$ where
+\begin{align*}
+  g_l = \underset{i+j+k+u+v+w=l}{\sum_{i=0}^7 \sum_{j=0}^7 \sum_{k=0}^7 \sum_{u=0}^7 \sum_{v=0}^7 \sum_{w=0}^7} a_i b_j c_k d_u e_v f_w.
+\end{align*}
+Since $q = 2^{255}-19$, we have
+\begin{align*}
+  2^{256} & = 38 \bmod q,\\
+  2^{512} & = 38^2 \bmod q,\\
+  2^{768} & = 38^3 \bmod q,\\
+  2^{1024} & = 38^4 \bmod q,\\
+  2^{1280} & = 38^5 \bmod q.
+\end{align*}
+We do not need to consider higher powers of $2^{256}$, since the highest power of 2 that appears in $g$ is $32 \times 42 = 1344$.
+
+We can rewrite $g$ (modulo $q$) as
+\begin{align*}
+  g  = \sum^{42}_{l=0} g_l 2^{32l} &=  \sum^{7}_{l=0} g_l 2^{32l} + 2^{256} \sum^{15}_{l=8} g_l 2^{32(l-8)} + 2^{512} \sum^{23}_{l=16} g_l 2^{32(l-16)}+ 2^{768} \sum^{31}_{l=24} g_l 2^{32(l-24)}\\
+                                   &\ \  + 2^{1024} \sum^{39}_{l=32} g_l 2^{32(l-32)}+ 2^{1280} \sum^{42}_{l=40} g_l 2^{32(l-40)} \\
+                                   &=  \sum^{7}_{l=0} g_l 2^{32l} + 38 \sum^{15}_{l=8} g_l 2^{32(l-8)} + 38^2 \sum^{23}_{l=16} g_l 2^{32(l-16)}+ 38^3 \sum^{31}_{l=24} g_l 2^{32(l-24)}\\
+                                   &\ \  + 38^4 \sum^{39}_{l=32} g_l 2^{32(l-32)}+ 38^5 \sum^{42}_{l=40} g_l 2^{32(l-40)} \\
+                                   & = g_0 + 38 g_8 + 38^2 g_{16} + 38^3 g_{24} + 38^4 g_{32} + 38^5 g_{40}\\
+                                   & \ + 2^{32} \left( g_1 + 38 g_9 + 38^2 g_{17} + 38^3 g_{25} + 38^4 g_{33} + 38^5 g_{41} \right)\\
+                                   & \ + 2^{64} \left( g_2 + 38 g_{10} + 38^2 g_{18} + 38^3 g_{26} + 38^4 g_{34} + 38^5 g_{42} \right)\\
+                                   & \ + 2^{96} \left( g_3 + 38 g_{11} + 38^2 g_{19} + 38^3 g_{27} + 38^4 g_{35} \right)\\
+                                   & \ + 2^{128} \left( g_4 + 38 g_{12} + 38^2 g_{20} + 38^3 g_{28} + 38^4 g_{36} \right)\\
+                                   & \ + 2^{160} \left( g_5 + 38 g_{13} + 38^2 g_{21} + 38^3 g_{29} + 38^4 g_{37} \right)\\
+                                   & \ + 2^{192} \left( g_6 + 38 g_{14} + 38^2 g_{22} + 38^3 g_{30} + 38^4 g_{38} \right)\\
+                                   & \ + 2^{224} \left( g_7 + 38 g_{15} + 38^2 g_{23} + 38^3 g_{31} + 38^4 g_{39} \right)\\
+\end{align*}
+Let $h_0, h_1,\ldots,h_7$ denote the limbs of the folded $g$, i.e.
+\begin{align*}
+  h_0 & = g_0 + 38 g_8 + 38^2 g_{16} + 38^3 g_{24} + 38^4 g_{32} + 38^5 g_{40},\\
+  h_1 & = g_1 + 38 g_9 + 38^2 g_{17} + 38^3 g_{25} + 38^4 g_{33} + 38^5 g_{41},\\
+  h_2 & = g_2 + 38 g_{10} + 38^2 g_{18} + 38^3 g_{26} + 38^4 g_{34} + 38^5 g_{42},\\
+  h_3 & = g_3 + 38 g_{11} + 38^2 g_{19} + 38^3 g_{27} + 38^4 g_{35} ,\\
+  h_4 & = g_4 + 38 g_{12} + 38^2 g_{20} + 38^3 g_{28} + 38^4 g_{36},\\
+  h_5 & = g_5 + 38 g_{13} + 38^2 g_{21} + 38^3 g_{29} + 38^4 g_{37},\\
+  h_6 & = g_6 + 38 g_{14} + 38^2 g_{22} + 38^3 g_{30} + 38^4 g_{38},\\
+  h_7 & = g_7 + 38 g_{15} + 38^2 g_{23} + 38^3 g_{31} + 38^4 g_{39}.\\
+\end{align*}
+
+As illustrated in Table \ref{tab:limb32}, each $g_l$ can occupy a maximum of 215 bits. Some $g_l$'s will fit in fewer bits. For example, $g_0 = a_0b_0c_0d_0e_0f_0$ will occupy a maximum of 192 bits. For ease of analysis, we will consider the worst-case bitwidth of 215 for all $g_l$'s. A more accurate analysis can lead to fewer constraints in the circuit. This is left for future work. The bitwidths of the powers of 38 are as shown in Table \ref{tab:powers_of_38}.
+\begin{table}[h]
+  \centering
+  \begin{tabular}{r|r} \
+    Number & Bitwidth \\ \hline
+  38 & 6 \\
+  $38^2$ & 11 \\
+  $38^3$ & 16 \\
+  $38^4$ & 21 \\
+  $38^5$ & 27 \\ \hline
+  \end{tabular}
+  \caption{Bitwidths of the powers of 38}
+  \label{tab:powers_of_38}
+\end{table}
+
+Based on these bitwidths, we note the following:
+\begin{itemize}
+  \item $h_0 = g_0 + 38 g_8 + 38^2 g_{16} + 38^3 g_{24} + 38^4 g_{32} + 38^5 g_{40}$ can occupy a maximum of 243 bits by the following observations.
+    \begin{itemize}
+      \item $g_0$ occupies a maximum of 215 bits
+      \item $38g_8$ occupies a maximum of 221 bits
+      \item $38^2 g_{16}$ occupies a maximum of 226 bits
+      \item $38^3 g_{24}$ occupies a maximum of 231 bits
+      \item $38^4 g_{32}$ occupies a maximum of 236 bits
+      \item $38^5 g_{40}$ occupies a maximum of 242 bits
+    \end{itemize}
+  \item Similarly, $h_1$ and $h_2$ can occupy a maximum of 243 bits.
+  \item $h_3 = g_3 + 38 g_{11} + 38^2 g_{19} + 38^3 g_{27} + 38^4 g_{35}$ can occupy a maximum of 237 bits by the following observations.
+    \begin{itemize}
+      \item $g_3$ occupies a maximum of 215 bits
+      \item $38g_{11}$ occupies a maximum of 221 bits
+      \item $38^2 g_{19}$ occupies a maximum of 226 bits
+      \item $38^3 g_{27}$ occupies a maximum of 231 bits
+      \item $38^4 g_{35}$ occupies a maximum of 236 bits
+    \end{itemize}
+  \item Similarly, $h_3, h_4, h_5, h_6,$ and $h_7$ can occupy a maximum of 237 bits.
+  \item So all the $h_i$'s can fit in $\mathbb{F}_n$ limbs.
+  \item The maximum value of $h$ is bounded by
+    \begin{align*}
+   &  h_0 + h_1 2^{32} + h_2 2^{64} + h_3 2^{96} + h_4 2^{128} +   h_5 2^{160} + h_6 2^{192}+ h_7 2^{224} \\
+   & \le 2^{243}-1 + \left( 2^{243}-1 \right) 2^{32} + \left( 2^{243}-1 \right) 2^{64} + \left( 2^{237}-1 \right) 2^{96} + \left( 2^{237}-1 \right)2^{128} +  \left( 2^{237}-1 \right) 2^{160} \\
+   & \ \ + \left( 2^{237}-1 \right) 2^{192}+ \left( 2^{237}-1 \right) 2^{224}\\
+   & < 2^{243} + 2^{275} + 2^{307} + 2^{333} + 2^{365} + 2^{397} + 2^{429} + 2^{461}\\
+   & < 2^{462}
+    \end{align*}
+\end{itemize}
+
+\subsection{Verifying the Point Addition using Sextic Equations}%
+\label{subsec:verifying_the_point_addition_sextic_equations}
+Recall the point verification equations from (\ref{eqn3}) and (\ref{eqn5}).
+\begin{align}
+  dx_1x_2y_1y_2y_3 + (q - y_3) + x_1x_2 + y_1y_2 &= 0 \bmod q,\label{eqn6}\\
+  dx_1x_2x_3y_1y_2 + x_3 + 2^{39}q - x_1y_2 - x_2y_1  &= 0 \bmod q.\label{eqn7}
+\end{align}
+In (\ref{eqn6}), the products $x_1x_2$ and $y_1y_2$ will be bounded by $2^{292}$ after folding (see end of Section \ref{subsec:folding_a_quadratic_product}). The term $q-y_3$ will be bounded by $2^{255}$. And finally, the sextic term $dx_1x_2y_1y_2y_3$ will be bounded by $2^{462}$ after folding (see end of Section \ref{subsec:folding_a_sextic_product}). So the LHS in (\ref{eqn6}) will be bounded by $2^{463}$.
+
+In (\ref{eqn7}), once the folded versions of $x_1y_2$ and $x_2y_1$ are deducted from $2^{39}q$ the remaining value is non-negative. The term $2^{39}q-x_1y_2-x_2y_1$ will be bounded by $2^{294}$. The term $x_3$ will be bounded by $2^{255}$. And finally, the sextic term $dx_1x_2x_3y_1y_2$ will be bounded by $2^{462}$ after folding (see end of Section \ref{subsec:folding_a_sextic_product}). So the LHS in (\ref{eqn6}) will be bounded by $2^{463}$.
+
+Let $s$ denote either of the LHS terms of (\ref{eqn6}) and (\ref{eqn7}) after folding. Let the unreduced representation of $s$ be
+\begin{align*}
+  s = s_0 + s_1 2^{32} + s_2 2^{64} + s_3 2^{96} + s_4 2^{128} + s_5 2^{160} + s_6 2^{192} + s_7 2^{224}.
+\end{align*}
+Each limb $s_i$ will be (conservatively) in the range $\{-2^{74}+1, 2^{244}-1\}$. This is because of the following observations.
+\begin{itemize}
+  \item The limbs of the sextic product terms $dx_1x_2y_1y_2y_3$ and $dx_1x_2x_3y_1y_2$ after folding are in the range $\{0,\ldots,2^{243}-1\}$
+  \item The limbs of $x_3$ and $q$ are in the range $\{0,1,\ldots,2^{64}-1\}$.
+  \item The limbs of $-y_3$ are in the range $\{-2^{64}+1,\ldots,0\}$.
+  \item The limbs of $x_1x_2$ and $y_1y_2$ after folding are in the range $\{0,1,\ldots,2^{73}-1\}$. So their sum will have limbs in the range $\{0,1,\ldots,2^{74}-2\}$.
+  \item The limbs of $x_1y_2$ and $x_2y_1$ after folding are in the range $\{0,1,\ldots,2^{73}-1\}$. So their sum will have limbs in the range $\{0,1,\ldots,2^{74}-2\}$. And their negation $-x_1y_2-x_2y_1$ will have limbs in the range $\{-2^{74}+2,\ldots,0\}$
+  \item The limbs of $2^{39}q$ will be in the range $\{0,1,\ldots,2^{103}-1\}$.
+\end{itemize}
+
+
+To show that $s = 0 \bmod q$, we show the existence of a quotient $t$ such that $s-tq = 0$. As $q > 2^{254}$ and $s < 2^{463}$, the maximum value of $t$ required to satisfy this equation is $2^{463-254} = 2^{209}$. So the quotient requires only seven 32-bit limbs in its reduced representation.
+\begin{align*}
+  t = t_0 + t_1 2^{32} +t_2 2^{64} + t_3 2^{96}+ t_4 2^{128} +   t_5 2^{160} + t_6 2^{192}\ \ \ \ \ \text{ where } t_i \in \{0,1,\ldots,2^{32}-1\}.
+\end{align*}
+The prime $q$ will have eight 32-bit limbs.
+\begin{align*}
+  q = q_0 + q_1 2^{32} + q_2 2^{64} + q_3 2^{96} + q_4 2^{128} +   q_5 2^{160} + q_6 2^{192}+ q_7 2^{224} \ \ \ \ \ \text{ where } q_i \in \{0,1,\ldots,2^{64}-1\}.
+\end{align*}
+The product $tq$ has an unreduced representation with 14 limbs each occupying upto 66 bits.
+\begin{align*}
+  tq  &= t_0q_0\\
+      & + (t_0q_1 + t_1q_0) 2^{32}\\
+      & + (t_0q_2 + t_1q_1 + t_2q_0) 2^{64}\\
+      & + (t_0q_3 + t_1q_2 + t_2q_1 + t_3q_0) 2^{96}\\
+      & + (t_0q_4 + t_1q_3 + t_2q_2 + t_3q_1 + t_4q_0) 2^{128}\\
+      & + (t_0q_5 + t_1q_4 + t_2q_3 + t_3q_2 + t_4q_1 + t_5q_0) 2^{160}\\
+      & + (t_0q_6 + t_1q_5 + t_2q_4 + t_3q_3 + t_4q_2 + t_5q_1 + t_6q_0) 2^{192}\\
+      & + (t_0q_7 + t_1q_6 + t_2q_5 + t_3q_4 + t_4q_3 + t_5q_2 + t_6q_1) 2^{224}\\
+      & + (t_1q_7 + t_2q_6 + t_3q_5 + t_4q_4 + t_5q_3 + t_6q_2) 2^{256}\\
+      & + (t_2q_7 + t_3q_6 + t_4q_5 + t_5q_4 + t_6q_3) 2^{288}\\
+      & + (t_3q_7 + t_4q_6 + t_5q_5 + t_6q_4) 2^{320}\\
+      & + (t_4q_7 + t_5q_6 + t_6q_5) 2^{352}\\
+      & + (t_5q_7 + t_6q_6) 2^{384}\\
+      & + t_6q_7 2^{416}
+\end{align*}
+Consider the following argument to check that $s-tq = 0$.
+\begin{enumerate}
+  \item $s_0-t_0q_0$ contains the 32 least significant bits of $s-tq$, i.e.~bits 0 to 31. These bits must all be zero. So $s_0-t_0q_0$ must be a multiple of $2^{32}$. 
+  \item Let $y_0 = \frac{s_0-t_0q_0}{2^{32}}$. This represents the \textit{carry} into the $2^{32}$ limb.
+  \item $y_0+s_1-t_0q_1-t_1q_0$ contains the \textit{next} 32 least significant bits of $s-tq$, i.e.~bits 32 to 63. These bits must also all be zero. So $y_0+s_1-t_0q_1-t_1q_0$ must be a multiple of $2^{32}$.
+  \item Let $y_1 = \frac{y_0+s_1-t_0q_1-t_1q_0}{2^{32}}$. This represents the carry into the $2^{64}$ limb.
+  \item $y_1+s_2-t_0q_2-t_1q_1-t_2q_0$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 64 to 95. These bits must also all be zero. So $y_1+s_2-t_0q_2-t_1q_1-t_2q_0$ must be a multiple of $2^{32}$.
+  \item Let $y_2 = \frac{y_1+s_2-t_0q_2-t_1q_1-t_2q_0}{2^{32}}$. This represents the carry into the $2^{96}$ limb.
+  \item $y_2+s_3-t_0q_3-t_1q_2-t_2q_1-t_3q_0$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 96 to 127. These bits must also all be zero. So $y_2+s_3-t_0q_3-t_1q_2-t_2q_1-t_3q_0$ must be a multiple of $2^{32}$.
+  \item Let $y_3 = \frac{y_2+s_3-t_0q_3-t_1q_2-t_2q_1-t_3q_0}{2^{32}}$. This represents the carry into the $2^{128}$ limb.
+  \item $y_3+s_4-t_0q_4-t_1q_3-t_2q_2-t_3q_1-t_4q_0$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 128 to 159. These bits must also all be zero. So $y_3+s_4-t_0q_4-t_1q_3-t_2q_2-t_3q_1-t_4q_0$ must be a multiple of $2^{32}$.
+  \item Let $y_4 = \frac{y_3+s_4-t_0q_4-t_1q_3-t_2q_2-t_3q_1-t_4q_0}{2^{32}}$. This represents the carry into the $2^{160}$ limb.
+  \item $y_4+s_5-t_0q_5-t_1q_4-t_2q_3-t_3q_2-t_4q_1-t_5q_0$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 160 to 191. These bits must also all be zero. So $y_4+s_5-t_0q_5-t_1q_4-t_2q_3-t_3q_2-t_4q_1-t_5q_0$ must be a multiple of $2^{32}$.
+  \item Let $y_5 = \frac{y_4+s_5-t_0q_5-t_1q_4-t_2q_3-t_3q_2-t_4q_1-t_5q_0}{2^{32}}$. This represents the carry into the $2^{192}$ limb.
+  \item $y_5+s_6-t_0q_6-t_1q_5-t_2q_4-t_3q_3-t_4q_2-t_5q_1-t_6q_0$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 192 to 223. These bits must also all be zero. So $y_5+s_6-t_0q_6-t_1q_5-t_2q_4-t_3q_3-t_4q_2-t_5q_1-t_6q_0$ must be a multiple of $2^{32}$.
+  \item Let $y_6 = \frac{y_5+s_6-t_0q_6-t_1q_5-t_2q_4-t_3q_3-t_4q_2-t_5q_1-t_6q_0}{2^{32}}$. This represents the carry into the $2^{224}$ limb.
+  \item $y_6+s_7-t_0q_7-t_1q_6-t_2q_5-t_3q_4-t_4q_3-t_5q_2-t_6q_1$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 224 to 255. These bits must also all be zero. So $y_6+s_7-t_0q_7-t_1q_6-t_2q_5-t_3q_4-t_4q_3-t_5q_2-t_6q_1$ must be a multiple of $2^{32}$.
+  \item Let $y_7 = \frac{y_6+s_7-t_0q_7-t_1q_6-t_2q_5-t_3q_4-t_4q_3-t_5q_2-t_6q_1}{2^{32}}$. This represents the carry into the $2^{256}$ limb.
+  \item $y_7-t_1q_7-t_2q_6-t_3q_5-t_4q_4-t_5q_3-t_6q_2$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 256 to 287. These bits must also all be zero. So $y_7-t_1q_7-t_2q_6-t_3q_5-t_4q_4-t_5q_3-t_6q_2$ must be a multiple of $2^{32}$.
+  \item Let $y_8 = \frac{y_7-t_1q_7-t_2q_6-t_3q_5-t_4q_4-t_5q_3-t_6q_2}{2^{32}}$. This represents the carry into the $2^{288}$ limb.
+  \item $y_8-t_2q_7-t_3q_6$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 288 to 319. These bits must also all be zero. So $y_8-t_2q_7-t_3q_6-t_4q_5-t_5q_4-t_6q_3$ must be a multiple of $2^{32}$.
+  \item Let $y_9 = \frac{y_8-t_2q_7-t_3q_6-t_4q_5-t_5q_4-t_6q_3}{2^{32}}$. This represents the carry into the $2^{320}$ limb.
+  \item $y_9-t_3q_7-t_4q_6-t_5q_5-t_6q_4$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 320 to 351. These bits must also all be zero. So $y_9-t_3q_7-t_4q_6-t_5q_5-t_6q_4$ must be a multiple of $2^{32}$.
+  \item Let $y_{10} = \frac{y_9-t_3q_7-t_4q_6-t_5q_5-t_6q_4}{2^{32}}$. This represents the carry into the $2^{352}$ limb.
+  \item $y_{10}-t_4q_7-t_5q_6-t_6q_5$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 352 to 383. These bits must also all be zero. So $y_{10}-t_4q_7-t_5q_6-t_6q_5$ must be a multiple of $2^{32}$.
+  \item Let $y_{11} = \frac{y_{10}-t_4q_7-t_5q_6-t_6q_5}{2^{32}}$. This represents the carry into the $2^{384}$ limb.
+  \item $y_{11}-t_5q_7-t_6q_6$ contains the next 32 least significant bits of $s-tq$, i.e.~bits 384 to 415. These bits must also all be zero. So $y_{11}-t_5q_7-t_6q_6$ must be a multiple of $2^{32}$.
+  \item Let $y_{12} = \frac{y_{11}-t_5q_7-t_6q_6}{2^{32}}$. This represents the carry into the $2^{416}$ limb.
+  \item $y_{12}-t_6q_7$ contains the remaining 47 least significant bits of $s-tq$, i.e.~bits 416 to 462. Recall that $s$ is bounded by $2^{463}$. These bits must also all be zero. So $y_{12}-t_6q_7$ \textit{must be zero}.
+\end{enumerate}
+
+As the $s_i$'s lie in the range $\{-2^{74}+1,\ldots, 2^{244}-1\}$ and the limbs of $tq$ occupy a maximum of 66 bits, the following terms (the unreduced limbs of $s-tq$) lie in the range $\{-2^{75}+1,\ldots,2^{244}-1\}$
+\begin{align*}
+  & s_0 - t_0q_0,\\
+  & s_1 - t_0q_1-t_1q_0,\\
+  & s_2 - t_0q_2-t_1q_1-t_2q_0,\\
+  & s_3 -  t_0q_3-t_1q_2-t_2q_1-t_3q_0,\\
+  & s_4 -  t_0q_4-t_1q_3-t_2q_2-t_3q_1-t_4q_0,\\
+  & s_5 -  t_0q_5-t_1q_4-t_2q_3-t_3q_2-t_4q_1-t_5q_0,\\
+  & s_6 -  t_0q_6-t_1q_5-t_2q_4-t_3q_3-t_4q_2-t_5q_1-t_6q_0,\\
+  & s_7 -  t_0q_7-t_1q_6-t_2q_5-t_3q_4-t_4q_3-t_5q_2-t_6q_1,\\
+  &  -  t_1q_7-t_2q_6-t_3q_5-t_4q_4-t_5q_3-t_6q_2,\\
+  &  -  t_2q_7-t_3q_6-t_4q_5-t_5q_4-t_6q_3,\\
+  &  -  t_3q_7-t_4q_6-t_5q_5-t_6q_4,\\
+  &  -  t_4q_7-t_5q_6-t_6q_5,\\
+  &  -  t_5q_7-t_6q_6,\\
+  &  -  t_6q_7.
+\end{align*}
+Both the upper and lower ends of the ranges are conservative but we keep these values for convenience.
+
+
+The carries $y_0,y_1,y_2,\ldots,y_{12}$ will be provided as non-deterministic advice to the arithmetic circuit. Instead of calculating $y_0$ as $\frac{g_0-t_0q_0}{2^{64}}$, we will check that $2^{64}y_0 = g_0-t_0q_0$ in the field $\mathbb{F}_n$. We need to apply range checks on the $y_i$'s to ensure that adding them will not exceed the capacity of $\mathbb{F}_n$.
+
+\begin{itemize}
+  \item As $s_0 - t_0q_0$ is in the range $\{-2^{75}+1,\ldots, 2^{244}-1\}$, $y_0$ can be checked to be in the range $\{-2^{43}+1,\ldots, 2^{212}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_0 + 2^{43}$ is in the range $\{0,1,\ldots,2^{213}-1\}$.
+  \item $y_0+s_1-t_0q_1-t_1q_0$ is in the range $\{-2^{76}+1,\ldots, 2^{245}-1\}$. Since $y_1 = \frac{y_0+s_1-t_0q_1-t_1q_0}{2^{32}}$, we can check that $y_1$ is in the range $\{-2^{44}+1,\ldots, 2^{213}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_1 + 2^{44}$ is in the range $\{0,1,\ldots,2^{214}-1\}$.
+  \item $y_1+s_2-t_0q_2-t_1q_1-t_2q_0$ is in the range $\{-2^{76}+1,\ldots, 2^{245}-1\}$. Since $y_2 = \frac{y_1+s_2-t_0q_2-t_1q_1-t_2q_0}{2^{32}}$, we can check that $y_2$ is in the range $\{-2^{44}+1,\ldots, 2^{213}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_2 + 2^{44}$ is in the range $\{0,1,\ldots,2^{214}-1\}$.
+  \item $y_2+s_3-t_0q_3-t_1q_2-t_2q_1-t_3q_0$ is in the range $\{-2^{76}+1,\ldots, 2^{245}-1\}$. Since $y_3 = \frac{y_2+s_3-t_0q_3-t_1q_2-t_2q_1-t_3q_0}{2^{32}}$, we can check that $y_3$ is in the range $\{-2^{44}+1,\ldots, 2^{213}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_3 + 2^{44}$ is in the range $\{0,1,\ldots,2^{214}-1\}$.
+  \item $y_3+s_4-t_0q_4-t_1q_3-t_2q_2-t_3q_1-t_4q_0$ is in the range $\{-2^{76}+1,\ldots, 2^{245}-1\}$. Since $y_4 = \frac{y_3+s_4-t_0q_4-t_1q_3-t_2q_2-t_3q_1-t_4q_0}{2^{32}}$, we can check that $y_4$ is in the range $\{-2^{44}+1,\ldots, 2^{213}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_4 + 2^{44}$ is in the range $\{0,1,\ldots,2^{214}-1\}$.
+  \item $y_4+s_5-t_0q_5-t_1q_4-t_2q_3-t_3q_2-t_4q_1-t_5q_0$ is in the range $\{-2^{76}+1,\ldots, 2^{245}-1\}$. Since $y_5 = \frac{y_4+s_5-t_0q_5-t_1q_4-t_2q_3-t_3q_2-t_4q_1-t_5q_0}{2^{32}}$, we can check that $y_5$ is in the range $\{-2^{44}+1,\ldots, 2^{213}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_5 + 2^{44}$ is in the range $\{0,1,\ldots,2^{214}-1\}$.
+  \item $y_5+s_6-t_0q_6-t_1q_5-t_2q_4-t_3q_3-t_4q_2-t_5q_1-t_6q_0$ is in the range $\{-2^{76}+1,\ldots, 2^{245}-1\}$. Since $y_6 = \frac{y_5+s_6-t_0q_6-t_1q_5-t_2q_4-t_3q_3-t_4q_2-t_5q_1-t_6q_0}{2^{32}}$, we can check that $y_6$ is in the range $\{-2^{44}+1,\ldots, 2^{213}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_6 + 2^{44}$ is in the range $\{0,1,\ldots,2^{214}-1\}$.
+  \item $y_6+s_7-t_0q_7-t_1q_6-t_2q_5-t_3q_4-t_4q_3-t_5q_2-t_6q_1$ is in the range $\{-2^{76}+1,\ldots, 2^{245}-1\}$. Since $y_7 = \frac{y_6+s_7-t_0q_7-t_1q_6-t_2q_5-t_3q_4-t_4q_3-t_5q_2-t_6q_1}{2^{32}}$, we can check that $y_7$ is in the range $\{-2^{44}+1,\ldots, 2^{213}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_7 + 2^{44}$ is in the range $\{0,1,\ldots,2^{214}-1\}$.
+  \item $y_7-t_1q_7-t_2q_6-t_3q_5-t_4q_4-t_5q_3-t_6q_2$ is in the range $\{-2^{67}+1,\ldots, 2^{213}-1\}$. Since $y_8 = \frac{y_7-t_1q_7-t_2q_6-t_3q_5-t_4q_4-t_5q_3-t_6q_2}{2^{32}}$, we can check that $y_8$ is in the range $\{-2^{35}+1,\ldots, 2^{181}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_8 + 2^{35}$ is in the range $\{0,1,\ldots,2^{182}-1\}$.
+  \item $y_8-t_2q_7-t_3q_6-t_4q_5-t_5q_4-t_6q_3$ is in the range $\{-2^{67}+1,\ldots, 2^{213}-1\}$. Since $y_9 = \frac{y_8-t_2q_7-t_3q_6-t_4q_5-t_5q_4-t_6q_3}{2^{32}}$, we can check that $y_9$ is in the range $\{-2^{35}+1,\ldots, 2^{181}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_9 + 2^{35}$ is in the range $\{0,1,\ldots,2^{182}-1\}$.
+  \item $y_9-t_3q_7-t_4q_6-t_5q_5-t_6q_4$ is in the range $\{-2^{67}+1,\ldots, 2^{213}-1\}$. Since $y_{10} = \frac{y_9-t_3q_7-t_4q_6-t_5q_5-t_6q_4}{2^{32}}$, we can check that $y_{10}$ is in the range $\{-2^{35}+1,\ldots, 2^{181}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_{10} + 2^{35}$ is in the range $\{0,1,\ldots,2^{182}-1\}$.
+  \item $y_{10}-t_4q_7-t_5q_6-t_6q_5$ is in the range $\{-2^{67}+1,\ldots, 2^{213}-1\}$. Since $y_{11} = \frac{y_{10}-t_4q_7-t_5q_6-t_6q_5}{2^{32}}$, we can check that $y_{11}$ is in the range $\{-2^{35}+1,\ldots, 2^{181}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_{11} + 2^{35}$ is in the range $\{0,1,\ldots,2^{182}-1\}$.
+  \item $y_{11}-t_5q_7-t_6q_6$ is in the range $\{-2^{67}+1,\ldots, 2^{213}-1\}$. Since $y_{12} = \frac{y_{11}-t_5q_7-t_6q_6}{2^{32}}$, we can check that $y_{12}$ is in the range $\{-2^{35}+1,\ldots, 2^{181}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_{12} + 2^{35}$ is in the range $\{0,1,\ldots,2^{182}-1\}$.
+\end{itemize}
+
+A range check for an $n$-bit range costs $n$ R1CS constraints. In the above list, there are 13 range checks costing a total of $213 + 7\times 214 + 5\times 182 = 2621$ constraints. The above check has to be done twice, once each (\ref{eqn6}) and (\ref{eqn7}). Just the range checks alone would cost 5242 constraints. With the 64-bit limb approach, the point addition verification is possible in about 4000 constraints. So the 32-bit limb approach is more expensive.
 
 \end{document}
