@@ -357,6 +357,7 @@ The bitwidths of the terms $h_i, q_i, t_i, r_i$ will be known due to range check
 \end{itemize}
 To simplify the arithmetic circuit logic (at least initially), the range checks on all the $y_i$'s can be for the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. Later the range check on $y_0$ can be for the smaller range $\{-2^{141}+1,\ldots,2^{141}-1\}$ and on $y_4$ can be for the smaller range $\{-2^{79}+1,\ldots,2^{79}-1\}$.
 
+A range check for an $n$-bit range costs $n$ R1CS constraints. In the above list, there are 5 range checks costing a total of $142 + 4 \times 143 = 714$ constraints. The above check has to be done two times, once for $dx_1x_2$ and once for $uy_1y_2$. So the range checks for carries in cubic reductions alone would cost 1428 constraints.
 \subsection{Reducing a Quadratic Expression}%
 \label{subsec:reducing_a_quadratic_expression}
 In Section \ref{subsec:reducing_a_cubic_product}, the cubic products being reduced had positive values due to the approach chosen in Section \ref{sec:an_approach_using_four_64_bit_limbs}. Recall our convention that $x \in \mathbb{F}_n$ is positive if $x \le \frac{n-1}{2}$. Even after the folding shown in Section \ref{subsec:reducing_a_cubic_product}, the values remain positive. Consequently, the quotient $t$ could be bounded in magnitude by $2^{140}$ and represented using three 64-bit limbs.
@@ -488,6 +489,9 @@ The carries $y_0,y_1,y_2,y_3$ will be provided as non-deterministic advice to th
 \end{itemize}
 To simplify the arithmetic circuit logic (at least initially), the range checks on all the $y_i$'s can be for the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. Later the range check on $y_0$ can be for the smaller range $\{-2^{74}+1,\ldots,2^{74}-1\}$.
 
+A range check for an $n$-bit range costs $n$ R1CS constraints. In the above list, there are 4 range checks costing a total of $75 + 4 \times 76 = 303$ constraints. The above check has to be done two times, once each for the two quadratic expressions. So the range checks for carries in quadratic expression reductions alone would cost 606 constraints.
+
+The range checks for carries in cubic reductions cost 1428 constraints. So the total range checks would cost 2034 constraints.
 \section{An Approach using Eight 32-bit Limbs}%
 \label{sec:an_approach_using_eight_32_bit_limbs}
 Unreduced representations of sextic products using eight 32-bit limbs can be safely calculated in fields with capacity 253 bits. The bitwidth growth of this case is illustrated in Table \ref{tab:limb32}. But we also have to account for the bitwidth growth due to the folding operations. These will be considered in the subsequent sections.
@@ -857,5 +861,144 @@ The carries $y_0,y_1,y_2,\ldots,y_{12}$ will be provided as non-deterministic ad
 \end{itemize}
 
 A range check for an $n$-bit range costs $n$ R1CS constraints. In the above list, there are 13 range checks costing a total of $213 + 7\times 214 + 5\times 182 = 2621$ constraints. The above check has to be done twice, once each (\ref{eqn6}) and (\ref{eqn7}). Just the range checks alone would cost 5242 constraints. With the 64-bit limb approach, the point addition verification is possible in about 4000 constraints. So the 32-bit limb approach is more expensive.
+
+\section{An Approach using Three 85-bit Limbs}%
+\label{sec:an_approach_using_three_85_bit_limbs}
+The previous approach demonstrated that the number of limbs can affect the circuit size via the number and size of range checks required at each stage. It seems worthwhile to investigate the case of using three 85-bit limbs to represent a ed25519 base field element. This representation was used by Electron Labs.\footnote{\url{https://github.com/Electron-Labs/ed25519-circom}} However, they did not use the lazy reduction approach of \texttt{circom-ecdsa}.
+
+As the cubic product 85-bit limbs will require 255 bits, the point verification can only involve quadratic terms in unreduced form.
+Recall that the affine point addition verification equations can be written as
+\begin{align}
+  x_3(1+dx_1x_2y_1y_2) &= x_1y_2 + x_2y_1,\label{eqn8}\\
+  y_3(1-dx_1x_2y_1y_2) &= x_1x_2 + y_1y_2.\label{eqn9}
+\end{align}
+We propose to try the following approach.
+\begin{itemize}
+  \item Calculate the reduced representation of the cubic $x_1x_2$. Let this representation be given by $u = \sum_{i=0}^{2}u_i 2^{85i}$.
+  \item Calculate the reduced representation of the cubic $y_1y_2$. Let this representation be given by $v = \sum_{i=0}^{2}v_i 2^{85i}$.
+  \item Calculate the reduced representation of the cubic $uv$. Let this representation be given by $w = \sum_{i=0}^{2}w_i 2^{85i}$.
+  \item Calculate the reduced representation of the cubic $dw$. Let this representation be given by $z = \sum_{i=0}^{2}z_i 2^{85i}$.
+  \item Check that the following quadratic equations hold.
+    \begin{align*}
+      & x_1y_2 + x_2y_1 -x_3 - x_3 z = 0,\\
+      & x_1x_2 + y_1y_2 -y_3 + y_3 z = 0.
+    \end{align*}
+\end{itemize}
+
+\subsection{Reducing a Quadratic Product}%
+\label{subsec:reducing_a_quadratic_product}
+Let $a,b$ be two elements in $\mathbb{F}_q$ available in their reduced representations.
+\begin{align*}
+  a = \sum^{2}_{i=0} a_i 2^{85i}, \ \ \ \ b = \sum^{2}_{i=0} b_i 2^{85i}.
+\end{align*}
+Let $g = ab$. Then we have $g = \sum_{i=0}^{4} g_i 2^{85i}$ where
+\begin{align*}
+  g_0 & = a_0b_0,\\
+  g_1 & = a_0b_1 + a_1b_0,\\
+  g_2 & = a_0b_2 + a_1b_1 + a_2b_0,\\
+  g_3 & = a_1b_2 + a_2b_1,\\
+  g_4 & = a_2b_2.
+\end{align*}
+The limbs $g_1,g_2,g_3$ occupy a maximum of 171 bits and the other limbs occupy 170 bits.
+
+Since $q = 2^{255}-19$, we have $2^{255} = 19 \bmod q$. We can rewrite $g$ (modulo $q$) as
+\begin{align*}
+  g  = \sum^{4}_{i=0} g_i 2^{85i} &= g_0 + g_1 2^{85} + g_2 2^{170} + g_3 2^{255} + g_4 2^{340}\\
+                                  & = g_0 + g_1 2^{85} + g_2 2^{170} + 2^{255}\left( g_3 + g_4 2^{85} \right) \\
+                                  & = g_0 + 19 g_3 + (g_1 + 19 g_4) 2^{85} + g_2 2^{170}\\
+                                  & = h_0 + h_1 2^{85} + h_2 2^{170},
+\end{align*}
+where
+\begin{align*}
+  h_0 & = g_0 + 19 g_3,\\
+  h_1 & = g_1 + 19 g_4,\\
+  h_2 & = g_2.\\
+\end{align*}
+We note the following:
+\begin{itemize}
+  \item Each of the $g_i$'s occupy a maximum of 172 bits.
+  \item The number 19 occupies 5 bits.
+  \item $h_0 = g_0 + 19 g_3$ can occupy a maximum of 177 bits by the following observations.
+    \begin{itemize}
+      \item $g_0$ occupies a maximum of 170 bits
+      \item $g_3$ occupies a maximum of 171 bits
+      \item $19g_3$ occupies a maximum of 176 bits
+    \end{itemize}
+  \item $h_1 = g_1 + 19 g_4$ can occupy a maximum of 176 bits by the following observations.
+    \begin{itemize}
+      \item $g_1$ occupies a maximum of 171 bits
+      \item $g_4$ occupies a maximum of 170 bits
+      \item $19g_4$ occupies a maximum of 175 bits
+    \end{itemize}
+  \item $h_2 = g_2$ can occupy a maximum of 172 bits
+  \item So all the $h_i$'s can fit in $\mathbb{F}_n$ limbs.
+  \item The maximum value of $g$ is bounded by
+    \begin{align*}
+      2^{177} - 1 + \left(2^{176} - 1\right) 2^{85}+ \left( 2^{172}-1 \right)2^{170}< 2^{177} + 2^{261} + 2^{342} < 2^{343}
+    \end{align*}
+\end{itemize}
+
+We want to find an $r \in \mathbb{F}_q$ in reduced representation such that 
+\begin{align}
+  g = tq+r
+  \label{eqn:g_equals_tq_plus_r}
+\end{align}
+for some quotient $t \in \mathbb{F}_q$. Here
+\begin{align*}
+  r = r_0 + r_1 2^{85} + r_2 2^{170} \ \ \ \ \ \text{ where } r_i \in \{0,1,\ldots,2^{85}-1\}.
+\end{align*}
+As $q > 2^{254}$, the maximum value of $t$ required to satisfy this equation is strictly less than $2^{343-254} = 2^{89}$. So the quotient requires only two 85-bit limbs in its reduced representation.
+\begin{align*}
+  t = t_0 + t_1 2^{85} \ \ \ \ \ \text{ where } t_0 \in \{0,1,\ldots,2^{85}-1\}, t_1 \in \{0,1,..,2^4-1\}.
+\end{align*}
+The prime $q$ will have three 85-bit limbs.
+\begin{align*}
+  q = q_0 + q_1 2^{85} + q_2 2^{170} \ \ \ \ \ \text{ where } q_i \in \{0,1,\ldots,2^{64}-1\}.
+\end{align*}
+
+The main challenge in checking (\ref{eqn:g_equals_tq_plus_r}) is the mismatch in the representations of the LHS and the RHS. On the LHS, $g$ has an unreduced representation with three limbs each occupying upto 177 bits.
+\begin{align*}
+   g = h_0 + h_1 2^{85} + h_2 2^{170}.
+\end{align*}
+On the RHS, $tq+r$ has an unreduced representation with six limbs each occupying upto 130 bits.
+\begin{align*}
+  tq+r  =&\ t_0q_0+r_0 + (t_0q_1 + t_1q_0 + r_1) 2^{85} + (t_0q_2 + t_1q_1 + r_2) 2^{170}+ t_1q_2 2^{255}.
+\end{align*}
+One way to check equality in (\ref{eqn:g_equals_tq_plus_r}) is to convert both $g$ and $tq+r$ to their reduced representations and check that these representations are equal. This would require range checks on the limbs of $g$ and $tq+r$. The number of boolean variables required for each range check will be equal to the bitwidth of the corresponding limb. Each boolean variable requires one constraint of the form $b(b-1) = 0$ in the R1CS system.
+
+We could reduce the number of range checks by checking that $g-tq-r$ equals zero. This is the approach used in \texttt{circom-ecdsa}. Consider the following argument assuming that $g-tq-r = 0$.
+\begin{enumerate}
+  \item $h_0-t_0q_0-r_0$ contains the 85 least significant bits of $g-tq-r$, i.e.~bits 0 to 84. These bits must all be zero. So $h_0-t_0q_0-r_0$ must be a multiple of $2^{85}$. 
+  \item Let $y_0 = \frac{h_0-t_0q_0-r_0}{2^{85}}$. This represents the \textit{carry} into the $2^{85}$ limb.
+  \item $y_0+h_1-t_0q_1-t_1q_0-r_1$ contains the \textit{next} 85 least significant bits of $g-tq-r$, i.e.~bits 85 to 169. These bits must also all be zero. So $y_0+h_1-t_0q_1-t_1q_0-r_1$ must be a multiple of $2^{85}$
+  \item Let $y_1 = \frac{y_0+h_1-t_0q_1-t_1q_0-r_1}{2^{85}}$. This represents the carry into the $2^{170}$ limb.
+  \item $y_1+h_2-t_0q_2-t_1q_1-r_2$ contains the next 85 least significant bits of $g-tq-r$, i.e.~bits 170 to 254. These bits must also all be zero. So $y_1+h_2-t_0q_2-t_1q_1-r_2$ must be a multiple of $2^{85}$.
+  \item Let $y_2 = \frac{y_1+h_2-t_0q_2-t_1q_1-r_2}{2^{85}}$. This represents the carry into the $2^{255}$ limb.
+  \item $y_2-t_1q_2$ contains the remaining 87 least significant bits of $g-tq-r$, i.e.~bits 255 to 342. Recall that $g$ is bounded by $2^{343}$. These bits must also all be zero. So $y_2-t_1q_2$ \textit{must be zero}.
+\end{enumerate}
+
+Note that the limbs of $g-tq-r$ can have negative values, i.e. they can experience underflows during the subtraction operation. We use the convention that $x \in \mathbb{F}_n$ is \textit{negative} if $x > \frac{n-1}{2}$.  For example, $h_0-t_0q_0-r_0$ can be a negative multiple of $2^{85}$.
+
+As $h_0, h_1, h_2$ have maximum bitwidths of 177, 176, and 172, $t_0, q_0, q_1, q_2, r_0, r_1, r_2$ having maximum bitwidth of 85, and $t_1$ having a maximum bitwidth of 4, the following terms (the unreduced limbs of $g-tq-r$) lie in the range indicated next to them.
+\begin{align*}
+  & h_0 - t_0q_0-r_0 & \in \{-2^{171}+1, 2^{177}-1\},\\
+  & h_1 - t_0q_1-t_1q_0-r_1 & \in \{-2^{171}+1, 2^{176}-1\},\\
+  & h_2 - t_0q_2-t_1q_1-r_2 & \in \{-2^{171}+1, 2^{172}-1\},\\
+  & - t_1q_2 & \in \{-2^{89}+1,0\}.
+\end{align*}
+
+The procedure for checking $g-tq-r =0$ involves the addition of multiple terms some of which can be negative. Furthermore, the addition will be performed in $\mathbb{F}_n$. A set of terms sum to zero in $\mathbb{F}_n$ may not sum to zero in $\mathbb{F}_q$. To ensure that they do sum to zero in $\mathbb{F}_q$, we should ensure that the bitwidths of the partial sums does not exceed the capacity of $\mathbb{F}_n$.
+
+The bitwidths of the terms $h_i, q_i, t_i, r_i$ will be known due to range checks. The carries $y_0,y_1,y_2$ will be provided as non-deterministic advice to the arithmetic circuit. Instead of calculating $y_0$ as $\frac{h_0-t_0q_0-r_0}{2^{85}}$, we will check that $2^{85}y_0 = h_0-t_0q_0-r_0$ in the field $\mathbb{F}_n$. We need to apply range checks on the $y_i$'s to ensure that adding them will not exceed the capacity of $\mathbb{F}_n$.
+
+\begin{itemize}
+  \item As $h_0 - t_0q_0-r_0$ is in the range $\{-2^{171}+1,\ldots, 2^{177}-1\}$, $y_0$ can be checked to be in the range $\{-2^{86}+1,\ldots, 2^{92}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_0 + 2^{86}$ is in the range $\{0,1,\ldots,2^{93}-1\}$.
+  \item $y_0+h_1-t_0q_1-t_1q_0-r_1$ is in the range $\{-2^{172}+1,\ldots, 2^{177}-1\}$. Since $y_1 = \frac{y_0+h_1-t_0q_1-t_1q_0-r_1}{2^{85}}$, we can check that $y_1$ is in the range $\{-2^{87}+1,\ldots, 2^{92}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_1 + 2^{87}$ is in the range $\{0,1,\ldots,2^{93}-1\}$.
+  \item $y_1+h_2-t_0q_2-t_1q_1-t_2q_0-r_2$ is in the range $\{-2^{172}+1,\ldots, 2^{173}-1\}$. Since $y_2 = \frac{y_1+h_2-t_0q_2-t_1q_1-t_2q_0-r_2}{2^{85}}$, we can check that $y_2$ is in the range $\{-2^{87}+1,\ldots, 2^{88}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_2 + 2^{87}$ is in the range $\{0,1,\ldots,2^{89}-1\}$.
+  \item $y_2-t_1q_2$ is in the range $\{-2^{90}+1,\ldots, 2^{88}-1\}$. Since $y_4 = \frac{y_2-t_1q_2}{2^{85}}$, we can check that $y_4$ is in the range $\{-2^{5}+1,\ldots, 2^{3}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_4 + 2^{5}$ is in the range $\{0,1,\ldots,2^{6}-1\}$.
+\end{itemize}
+
+A range check for an $n$-bit range costs $n$ R1CS constraints. In the above list, there are 4 range checks costing a total of $93 \times 2 + 89 + 6 = 281$ constraints. The above check has to be done \textbf{twelve} times, six times each for (\ref{eqn8}) and (\ref{eqn9}). Just the carry range checks alone would cost 3372 constraints. With the 64-bit limb approach, the point addition verification is possible in about 4000 constraints, of which the carry range checks were 2034 constraints. As the total number of constraints is roughly double the carry range checks, the 85-bit limb approach is \textit{likely} to be more expensive.
+
 
 \end{document}
