@@ -226,7 +226,7 @@ In terms of $a_i,b_i,c_i$, the limbs of $g$ are given by
   g_8 & = a_2b_3c_3 + a_3b_2c_3 + a_3b_3c_2,\\
   g_9 & = a_3b_3c_3,\\
 \end{align*}
-The limbs $g_4$ and $g_5$ occupy a maximum of 195 bits, 192 bits for the products and 3 bits for the carry from the addition of 12 products. The other limbs occupy fewer than 195 bits.
+The limbs $g_4$ and $g_5$ occupy a maximum of 196 bits, 192 bits for the products and 4 bits for the carry from the addition of 12 products. The other limbs occupy fewer than 196 bits.
 
 Since $q = 2^{255}-19$, we have $2^{256} = 38 \bmod q$ and $2^{512} = 38^2 = 1444 \bmod q$. We can rewrite $g$ as
 \begin{align*}
@@ -245,40 +245,40 @@ where
 \end{align*}
 We note the following:
 \begin{itemize}
-  \item Each of the $g_i$'s occupy a maximum of 195 bits.
+  \item Each of the $g_i$'s occupy a maximum of 196 bits.
   \item The numbers 38 and 1444 occupy 6 bits and 11 bits respectively.
-  \item $h_0 = g_0 + 38 g_4 + 1444 g_8$ can occupy a maximum of 205 bits by the following observations.
+  \item $h_0 = g_0 + 38 g_4 + 1444 g_8$ can occupy a maximum of 206 bits by the following observations.
     \begin{itemize}
       \item $g_0$ occupies a maximum of 192 bits
-      \item $g_4$ occupies a maximum of 195 bits
-      \item $38g_4$ occupies a maximum of 201 bits
-      \item $g_8$ occupies a maximum of 193 bits
-      \item $1444g_8$ occupies a maximum of 204 bits
+      \item $g_4$ occupies a maximum of 196 bits
+      \item $38g_4$ occupies a maximum of 202 bits
+      \item $g_8$ occupies a maximum of 194 bits
+      \item $1444g_8$ occupies a maximum of 205 bits
     \end{itemize}
   \item $h_1 = g_1 + 38 g_5 + 1444 g_9$ can occupy a maximum of 204 bits by the following observations.
     \begin{itemize}
-      \item $g_1$ occupies a maximum of 193 bits
-      \item $g_5$ occupies a maximum of 195 bits
-      \item $38g_5$ occupies a maximum of 201 bits
+      \item $g_1$ occupies a maximum of 194 bits
+      \item $g_5$ occupies a maximum of 196 bits
+      \item $38g_5$ occupies a maximum of 202 bits
       \item $g_9$ occupies a maximum of 192 bits
       \item $1444g_9$ occupies a maximum of 203 bits
     \end{itemize}
-  \item $h_2 = g_2 + 38 g_6$ can occupy a maximum of 202 bits by the following observations.
+  \item $h_2 = g_2 + 38 g_6$ can occupy a maximum of 203 bits by the following observations.
     \begin{itemize}
-      \item $g_2$ occupies a maximum of 194 bits
-      \item $g_6$ occupies a maximum of 195 bits
-      \item $38g_6$ occupies a maximum of 201 bits
+      \item $g_2$ occupies a maximum of 195 bits
+      \item $g_6$ occupies a maximum of 196 bits
+      \item $38g_6$ occupies a maximum of 202 bits
     \end{itemize}
-  \item $h_3 = g_3 + 38 g_7$ can occupy a maximum of 201 bits by the following observations.
+  \item $h_3 = g_3 + 38 g_7$ can occupy a maximum of 202 bits by the following observations.
     \begin{itemize}
       \item $g_3$ occupies a maximum of 196 bits
-      \item $g_7$ occupies a maximum of 194 bits
-      \item $38g_7$ occupies a maximum of 200 bits
+      \item $g_7$ occupies a maximum of 195 bits
+      \item $38g_7$ occupies a maximum of 201 bits
     \end{itemize}
   \item So all the $h_i$'s can fit in $\mathbb{F}_n$ limbs.
   \item The maximum value of $g$ is bounded by
     \begin{align*}
-      2^{205} - 1 + \left(2^{204} - 1\right) 2^{64}+ \left( 2^{202}-1 \right)2^{128}+ \left( 2^{201}-1 \right)2^{192} < 2^{205} + 2^{268} + 2^{330} + 2^{393} < 2^{394}
+      2^{206} - 1 + \left(2^{204} - 1\right) 2^{64}+ \left( 2^{203}-1 \right)2^{128}+ \left( 2^{202}-1 \right)2^{192} < 2^{206} + 2^{268} + 2^{331} + 2^{394} < 2^{395}
     \end{align*}
   \item So the reduced representation of $g$ will have at most seven 64-bit limbs. Let $g_0', g_1',\ldots,g_6'$ denote these limbs.
    \begin{align*}
@@ -296,16 +296,16 @@ for some quotient $t \in \mathbb{F}_q$. Here
 \begin{align*}
   r = r_0 + r_1 2^{64} + r_2 2^{128} + r_3 2^{192} \ \ \ \ \ \text{ where } r_i \in \{0,1,\ldots,2^{64}-1\}.
 \end{align*}
-As $q > 2^{254}$, the maximum value of $t$ required to satisfy this equation is $2^{394-254} = 2^{140}$. So the quotient requires only three 64-bit limbs in its reduced representation.
+As $q > 2^{254}$, the maximum value of $t$ required to satisfy this equation is strictly less than $2^{395-254} = 2^{141}$. So the quotient requires only three 64-bit limbs in its reduced representation.
 \begin{align*}
-  t = t_0 + t_1 2^{64} + t_2 2^{128}\ \ \ \ \ \text{ where } t_i \in \{0,1,\ldots,2^{64}-1\}.
+  t = t_0 + t_1 2^{64} + t_2 2^{128}\ \ \ \ \ \text{ where } t_0, t_1 \in \{0,1,\ldots,2^{64}-1\}, t_2 \in \{0,1,\ldots,2^{13}-1\}.
 \end{align*}
 The prime $q$ will have four 64-bit limbs.
 \begin{align*}
   q = q_0 + q_1 2^{64} + q_2 2^{128} + q_3 2^{192} \ \ \ \ \ \text{ where } q_i \in \{0,1,\ldots,2^{64}-1\}.
 \end{align*}
 
-The main challenge in checking (\ref{eqn:g_equals_tq_plus_r}) is the mismatch in the representations of the LHS and the RHS. On the LHS, $g$ has an unreduced representation with four limbs each occupying upto 205 bits.
+The main challenge in checking (\ref{eqn:g_equals_tq_plus_r}) is the mismatch in the representations of the LHS and the RHS. On the LHS, $g$ has an unreduced representation with four limbs each occupying upto 206 bits.
 \begin{align*}
    g = h_0 + h_1 2^{64} + h_2 2^{128} + h_3 2^{192}.
 \end{align*}
@@ -328,36 +328,34 @@ We could reduce the number of range checks by checking that $g-tq-r$ equals zero
   \item Let $y_3 = \frac{y_2+h_3-t_0q_3-t_1q_2-t_2q_1-r_3}{2^{64}}$. This represents the carry into the $2^{256}$ limb.
   \item $y_3-t_1q_3-t_2q_2$ contains the next 64 least significant bits of $g-tq-r$, i.e.~bits 256 to 319. These bits must also all be zero. So $y_3-t_1q_3-t_2q_2$ must be a multiple of $2^{64}$
   \item Let $y_4 = \frac{y_3-t_1q_3-t_2q_2}{2^{64}}$. This represents the carry into the $2^{320}$ limb.
-  \item $y_4-t_2q_3$ contains the remaining 74 least significant bits of $g-tq-r$, i.e.~bits 320 to 393. Recall that $g$ is bounded by $2^{394}$. These bits must also all be zero. So $y_4-t_2q_3$ \textit{must be zero}.
+  \item $y_4-t_2q_3$ contains the remaining 75 least significant bits of $g-tq-r$, i.e.~bits 320 to 394. Recall that $g$ is bounded by $2^{395}$. These bits must also all be zero. So $y_4-t_2q_3$ \textit{must be zero}.
 \end{enumerate}
 
 Note that the limbs of $g-tq-r$ can have negative values, i.e. they can experience underflows during the subtraction operation. We use the convention that $x \in \mathbb{F}_n$ is \textit{negative} if $x > \frac{n-1}{2}$.  For example, $h_0-t_0q_0-r_0$ can be a negative multiple of $2^{64}$.
 
-As the $h_i$'s have a maximum bitwidth of 205, the following terms (the unreduced limbs of $g-tq-r$) lie in the range $\{-2^{205}+1,\ldots, 2^{205}-1\}$.
+As $h_0, h_1, h_2, h_3$ have maximum bitwidths of 206, 204, 203, and 202, $t_0, t_1, q_0, q_1, q_2, q_3, r_0, r_1, r_2, r_3$ have maximum bitwidths of 64, and $t_2$ has a maximum bitwidth of 13, the following terms (the unreduced limbs of $g-tq-r$) lie in the range indicated next to them.
 \begin{align*}
-  & h_0 - t_0q_0-r_0,\\
-  & h_1 - t_0q_1-t_1q_0-r_1,\\
-  & h_2 - t_0q_2-t_1q_1-t_2q_0-r_2,\\
-  & h_3 -  t_0q_3-t_1q_2-t_2q_1-r_3,\\
-  & - t_1q_3-t_2q_2,\\
-  & - t_2q_3.
+  & h_0 - t_0q_0-r_0 & \in \{-2^{129}+1, 2^{206}-1 \},\\
+  & h_1 - t_0q_1-t_1q_0-r_1 & \in \{-2^{130}+1, 2^{204}-1 \},\\
+  & h_2 - t_0q_2-t_1q_1-t_2q_0-r_2 & \in \{-2^{130}+1, 2^{203}-1 \},\\
+  & h_3 -  t_0q_3-t_1q_2-t_2q_1-r_3 & \in \{-2^{130}+1, 2^{202}-1 \},\\
+  & - t_1q_3-t_2q_2 & \in \{-2^{129}+1, 0\},\\
+  & - t_2q_3 & \in \{-2^{77}+1,0 \}.
 \end{align*}
-Both the upper and lower ends of the ranges are conservative but we keep these values for convenience.
 
 The procedure for checking $g-tq-r =0$ involves the addition of multiple terms some of which can be negative. Furthermore, the addition will be performed in $\mathbb{F}_n$. A set of terms sum to zero in $\mathbb{F}_n$ may not sum to zero in $\mathbb{F}_q$. To ensure that they do sum to zero in $\mathbb{F}_q$, we should ensure that the bitwidths of the partial sums does not exceed the capacity of $\mathbb{F}_n$.
 
 The bitwidths of the terms $h_i, q_i, t_i, r_i$ will be known due to range checks. The carries $y_0,y_1,\ldots,y_4$ will be provided as non-deterministic advice to the arithmetic circuit. Instead of calculating $y_0$ as $\frac{h_0-t_0q_0-r_0}{2^{64}}$, we will check that $2^{64}y_0 = h_0-t_0q_0-r_0$ in the field $\mathbb{F}_n$. We need to apply range checks on the $y_i$'s to ensure that adding them will not exceed the capacity of $\mathbb{F}_n$.
 
 \begin{itemize}
-  \item As $h_0 - t_0q_0-r_0$ is in the range $\{-2^{205}+1,\ldots, 2^{205}-1\}$, $y_0$ can be checked to be in the range $\{-2^{141}+1,\ldots, 2^{141}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_0 + 2^{141}$ is in the range $\{0,1,\ldots,2^{142}-1\}$.
-  \item $y_0+h_1-t_0q_1-t_1q_0-r_1$ is in the range $\{-2^{206}+1,\ldots, 2^{206}-1\}$. Since $y_1 = \frac{y_0+h_1-t_0q_1-t_1q_0-r_1}{2^{64}}$, we can check that $y_1$ is in the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_1 + 2^{142}$ is in the range $\{0,1,\ldots,2^{143}-1\}$.
-  \item $y_1+h_2-t_0q_2-t_1q_1-t_2q_0-r_2$ is in the range $\{-2^{206}+1,\ldots, 2^{206}-1\}$. Since $y_2 = \frac{y_1+h_2-t_0q_2-t_1q_1-t_2q_0-r_2}{2^{64}}$, we can check that $y_2$ is in the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_2 + 2^{142}$ is in the range $\{0,1,\ldots,2^{143}-1\}$.
-  \item $y_2+h_3-t_0q_3-t_1q_2-t_2q_1-r_3$ is in the range $\{-2^{206}+1,\ldots, 2^{206}-1\}$. Since $y_3 = \frac{y_2+h_3-t_0q_3-t_1q_2-t_2q_1-r_3}{2^{64}}$, we can check that $y_3$ is in the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_3 + 2^{142}$ is in the range $\{0,1,\ldots,2^{143}-1\}$.
-  \item $y_3-t_1q_3-t_2q_2$ is (conservatively) in the range $\{-2^{206}+1,\ldots, 2^{206}-1\}$. Since $y_4 = \frac{y_3-t_1q_3-t_2q_2}{2^{64}}$, we can check that $y_4$ is in the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_4 + 2^{142}$ is in the range $\{0,1,\ldots,2^{143}-1\}$.
+  \item As $h_0 - t_0q_0-r_0$ is in the range $\{-2^{129}+1,\ldots, 2^{206}-1\}$, $y_0$ can be checked to be in the range $\{-2^{65}+1,\ldots, 2^{142}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_0 + 2^{65}$ is in the range $\{0,1,\ldots,2^{143}-1\}$.
+  \item $y_0+h_1-t_0q_1-t_1q_0-r_1$ is in the range $\{-2^{131}+1,\ldots, 2^{205}-1\}$. Since $y_1 = \frac{y_0+h_1-t_0q_1-t_1q_0-r_1}{2^{64}}$, we can check that $y_1$ is in the range $\{-2^{67}+1,\ldots, 2^{141}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_1 + 2^{67}$ is in the range $\{0,1,\ldots,2^{142}-1\}$.
+  \item $y_1+h_2-t_0q_2-t_1q_1-t_2q_0-r_2$ is in the range $\{-2^{131}+1,\ldots, 2^{204}-1\}$. Since $y_2 = \frac{y_1+h_2-t_0q_2-t_1q_1-t_2q_0-r_2}{2^{64}}$, we can check that $y_2$ is in the range $\{-2^{67}+1,\ldots, 2^{140}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_2 + 2^{67}$ is in the range $\{0,1,\ldots,2^{141}-1\}$.
+  \item $y_2+h_3-t_0q_3-t_1q_2-t_2q_1-r_3$ is in the range $\{-2^{131}+1,\ldots, 2^{203}-1\}$. Since $y_3 = \frac{y_2+h_3-t_0q_3-t_1q_2-t_2q_1-r_3}{2^{64}}$, we can check that $y_3$ is in the range $\{-2^{67}+1,\ldots, 2^{139}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_3 + 2^{67}$ is in the range $\{0,1,\ldots,2^{140}-1\}$.
+  \item $y_3-t_1q_3-t_2q_2$ is in the range $\{-2^{130}+1,\ldots, 2^{139}-1\}$. Since $y_4 = \frac{y_3-t_1q_3-t_2q_2}{2^{64}}$, we can check that $y_4$ is in the range $\{-2^{66}+1,\ldots, 2^{75}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_4 + 2^{66}$ is in the range $\{0,1,\ldots,2^{76}-1\}$.
 \end{itemize}
-To simplify the arithmetic circuit logic (at least initially), the range checks on all the $y_i$'s can be for the range $\{-2^{142}+1,\ldots, 2^{142}-1\}$. Later the range check on $y_0$ can be for the smaller range $\{-2^{141}+1,\ldots,2^{141}-1\}$ and on $y_4$ can be for the smaller range $\{-2^{79}+1,\ldots,2^{79}-1\}$.
 
-A range check for an $n$-bit range costs $n$ R1CS constraints. In the above list, there are 5 range checks costing a total of $142 + 4 \times 143 = 714$ constraints. The above check has to be done two times, once for $dx_1x_2$ and once for $uy_1y_2$. So the range checks for carries in cubic reductions alone would cost 1428 constraints.
+A range check for an $n$-bit range costs $n$ R1CS constraints. In the above list, there are 5 range checks costing a total of $143 + 142+ 141 + 140 + 76 = 642$ constraints. The above check has to be done two times, once for $dx_1x_2$ and once for $uy_1y_2$. So the range checks for carries in cubic reductions alone would cost 1284 constraints.
 \subsection{Reducing a Quadratic Expression}%
 \label{subsec:reducing_a_quadratic_expression}
 In Section \ref{subsec:reducing_a_cubic_product}, the cubic products being reduced had positive values due to the approach chosen in Section \ref{sec:an_approach_using_four_64_bit_limbs}. Recall our convention that $x \in \mathbb{F}_n$ is positive if $x \le \frac{n-1}{2}$. Even after the folding shown in Section \ref{subsec:reducing_a_cubic_product}, the values remain positive. Consequently, the quotient $t$ could be bounded in magnitude by $2^{140}$ and represented using three 64-bit limbs.
@@ -419,33 +417,46 @@ We note the following:
 \begin{itemize}
   \item Each of the $f_i$'s occupy a maximum of 130 bits.
   \item The number 38 occupies 6 bits.
-  \item $f_4$ occupies a maximum of 129 bits
-  \item $38f_4$ occupies a maximum of 135 bits. This implies $h_0$ can occupy a maximum of 136 bits.
-  \item By the same argument, $h_1$ occupies a maximum of 136 bits.
-  \item $f_2$ occupies a maximum of 129 bits
-  \item $38f_6$ occupies a maximum of 134 bits. This implies $h_2$ can occupy a maximum of 135 bits.
-  \item $h_3$ occupies a maximum of 128 bits.
+  \item $h_0 = f_0 + 38 f_4$ can occupy a maximum of 137 bits by the following observations.
+    \begin{itemize}
+      \item $f_0$ occupies a maximum of 128 bits
+      \item $f_4$ occupies a maximum of 130 bits
+      \item $38f_4$ occupies a maximum of 136 bits
+    \end{itemize}
+  \item $h_1 = f_1 + 38 f_5$ can occupy a maximum of 136 bits by the following observations.
+    \begin{itemize}
+      \item $f_1$ occupies a maximum of 129 bits
+      \item $f_5$ occupies a maximum of 129 bits
+      \item $38f_5$ occupies a maximum of 135 bits
+    \end{itemize}
+  \item $h_2 = f_2 + 38 f_6$ can occupy a maximum of 135 bits by the following observations.
+    \begin{itemize}
+      \item $f_2$ occupies a maximum of 130 bits
+      \item $f_6$ occupies a maximum of 128 bits
+      \item $38f_6$ occupies a maximum of 134 bits
+    \end{itemize}
+  \item $h_3 = f_3$ occupies a maximum of 130 bits.
   \item So all the $h_i$'s can fit in $\mathbb{F}_n$ limbs.
   \item The maximum value of $f$ is bounded by
     \begin{align*}
-      2^{136} - 1 + \left(2^{136} - 1\right) 2^{64}+ \left( 2^{135}-1 \right)2^{128}+ \left( 2^{128}-1 \right)2^{192} < 2^{136} + 2^{200} + 2^{263} + 2^{320} < 2^{321}
+      2^{137} - 1 + \left(2^{136} - 1\right) 2^{64}+ \left( 2^{135}-1 \right)2^{128}+ \left( 2^{130}-1 \right)2^{192} < 2^{137} + 2^{200} + 2^{263} + 2^{322} < 2^{323}
     \end{align*}
 \end{itemize}
 
-We can then conclude that the expression $x_1y_2+x_2y_1-x_3-x_3v$ will (conservatively) be in the range $\{-2^{323}+1,\ldots,2^{323}-1\}$. The same conclusion holds for the expression $x_1x_2 + y_1y_2 -y_3 + y_3 v$.
+We can then conclude that the expression $x_1y_2+x_2y_1-x_3-x_3v$ will (conservatively) be in the range $\{-2^{325}+1,\ldots,2^{325}-1\}$. The same conclusion holds for the expression $x_1x_2 + y_1y_2 -y_3 + y_3 v$.
 
-As $q > 2^{254}$, adding $2^{70}q$ to these two expressions will make the corresponding sums positive. Note that the individual limbs of $x_1y_2+x_2y_1-x_3-x_3v + 2^{70}q$ and $x_1x_2 + y_1y_2 -y_3 + y_3 v + 2^{70}q$ can be negative but the integers themselves will be positive. Moreover each limb will have magnitude less than $2^{138}$. This is because each product in $\{x_1y_2, x_2y_1, x_3v, x_1x_2, y_1y_2, x_3v\}$ has limbs with magnitude less than $2^{136}$. The four limbs of $2^{70}q$ occupy a maximum of 134 bits.
+As $q > 2^{254}$, adding $2^{71}q$ to these two expressions will make the corresponding sums positive. Note that the individual limbs of $x_1y_2+x_2y_1-x_3-x_3v + 2^{71}q$ and $x_1x_2 + y_1y_2 -y_3 + y_3 v + 2^{71}q$ can be negative but the integers themselves will be positive. Moreover each limb will have magnitude less than $2^{139}$. This is because each product in $\{x_1y_2, x_2y_1, x_3v, x_1x_2, y_1y_2, x_3v\}$ has limbs with magnitude less than $2^{137}$. The four limbs of $2^{71}q$ occupy a maximum of 135 bits.
 
 
-Let $g$ be equal to $x_1y_2+x_2y_1-x_3-x_3v + 2^{70}q$ or $x_1x_2 + y_1y_2 -y_3 + y_3 v + 2^{70}q$. Let the unreduced representation of $g$ be
+Let $g$ be equal to $x_1y_2+x_2y_1-x_3-x_3v + 2^{71}q$ or $x_1x_2 + y_1y_2 -y_3 + y_3 v + 2^{71}q$. Let the unreduced representation of $g$ be
 \begin{align*}
   g = g_0 + g_1 2^{64} + g_2 2^{128} + g_3 2^{192},
 \end{align*}
 where each $g_i \in \{0,\ldots,2^{138}-1\}$. The value of $g$ is less than $2^{326}$.
 
-To show that $g = 0 \bmod q$, we show the existence of a quotient $t$ such that $g-tq = 0$. As $q > 2^{254}$ and $g < 2^{326}$, the maximum value of $t$ required to satisfy this equation is $2^{326-254} = 2^{72}$. So the quotient requires only two 64-bit limbs in its reduced representation.
+To show that $g = 0 \bmod q$, we show the existence of a quotient $t$ such that $g-tq = 0$. As $q > 2^{254}$ and $g < 2^{326}$, the maximum value of $t$ required to satisfy this equation is strictly less than $2^{326-254} = 2^{72}$. So the quotient requires only two 64-bit limbs in its reduced representation.
 \begin{align*}
-  t = t_0 + t_1 2^{64}\ \ \ \ \ \text{ where } t_i \in \{0,1,\ldots,2^{64}-1\}.
+  t = t_0 + t_1 2^{64}\ \ \ \ \ \text{ where } t_0 \in \{0,1,\ldots,2^{64}-1\}, t_1 \in \{0,1,\ldots,2^8-1\}.
 \end{align*}
 The prime $q$ will have four 64-bit limbs.
 \begin{align*}
@@ -468,30 +479,29 @@ Consider the following argument to check that $g-tq = 0$.
   \item $y_3-t_1q_3$ contains the remaining 70 least significant bits of $g-tq$, i.e.~bits 256 to 325. Recall that $g$ is bounded by $2^{326}$. These bits must also all be zero. So $y_3-t_1q_3$ \textit{must be zero}.
 \end{enumerate}
 
-As the $g_i$'s have a maximum bitwidth of 138, the following terms (the unreduced limbs of $g-tq$) lie in the range $\{-2^{138}+1,\ldots, 2^{138}-1\}$.
+As the $g_i$'s have a maximum bitwidth of 139, $t_0, q_0, q_1, q_2, q_3, r_0, r_1, r_2, r_3$ have maximum bitwidths of 64, and $t_1$ has a maximum bitwidth of 8, the following terms (the unreduced limbs of $g-tq-r$) lie in the range indicated next to them.
+As the $g_i$'s have a maximum bitwidth of 139, the following terms (the unreduced limbs of $g-tq$) lie in the range $\{-2^{139}+1,\ldots, 2^{139}-1\}$.
 \begin{align*}
-  & g_0 - t_0q_0,\\
-  & g_1 - t_0q_1-t_1q_0,\\
-  & g_2 - t_0q_2-t_1q_1,\\
-  & g_3 -  t_0q_3-t_1q_2,\\
-  & - t_1q_3.
+  & g_0 - t_0q_0 & \in \{-2^{128}+1, 2^{139}-1\},\\
+  & g_1 - t_0q_1-t_1q_0 & \in \{-2^{129}+1, 2^{139}-1\},\\
+  & g_2 - t_0q_2-t_1q_1 & \in \{-2^{129}+1, 2^{139}-1\},\\
+  & g_3 -  t_0q_3-t_1q_2 & \in \{-2^{129}+1, 2^{139}-1\},\\
+  & - t_1q_3 & \in \{-2^{72}+1, 0\}.
 \end{align*}
-Both the upper and lower ends of the ranges are conservative but we keep these values for convenience.
 
 
 The carries $y_0,y_1,y_2,y_3$ will be provided as non-deterministic advice to the arithmetic circuit. Instead of calculating $y_0$ as $\frac{g_0-t_0q_0}{2^{64}}$, we will check that $2^{64}y_0 = g_0-t_0q_0$ in the field $\mathbb{F}_n$. We need to apply range checks on the $y_i$'s to ensure that adding them will not exceed the capacity of $\mathbb{F}_n$.
 
 \begin{itemize}
-  \item As $g_0 - t_0q_0$ is in the range $\{-2^{138}+1,\ldots, 2^{138}-1\}$, $y_0$ can be checked to be in the range $\{-2^{74}+1,\ldots, 2^{74}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_0 + 2^{74}$ is in the range $\{0,1,\ldots,2^{75}-1\}$.
-  \item $y_0+g_1-t_0q_1-t_1q_0$ is in the range $\{-2^{139}+1,\ldots, 2^{139}-1\}$. Since $y_1 = \frac{y_0+g_1-t_0q_1-t_1q_0}{2^{64}}$, we can check that $y_1$ is in the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_1 + 2^{75}$ is in the range $\{0,1,\ldots,2^{76}-1\}$.
-  \item $y_1+g_2-t_0q_2-t_1q_1$ is in the range $\{-2^{139}+1,\ldots, 2^{139}-1\}$. Since $y_2 = \frac{y_1+g_2-t_0q_2-t_1q_1}{2^{64}}$, we can check that $y_2$ is in the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_2 + 2^{75}$ is in the range $\{0,1,\ldots,2^{76}-1\}$.
-  \item $y_2+g_3-t_0q_3-t_1q_2$ is in the range $\{-2^{139}+1,\ldots, 2^{139}-1\}$. Since $y_3 = \frac{y_2+g_3-t_0q_3-t_1q_2}{2^{64}}$, we can check that $y_3$ is in the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_3 + 2^{75}$ is in the range $\{0,1,\ldots,2^{76}-1\}$.
+  \item As $g_0 - t_0q_0$ is in the range $\{-2^{128}+1,\ldots, 2^{139}-1\}$, $y_0$ can be checked to be in the range $\{-2^{64}+1,\ldots, 2^{75}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_0 + 2^{64}$ is in the range $\{0,1,\ldots,2^{76}-1\}$.
+  \item $y_0+g_1-t_0q_1-t_1q_0$ is in the range $\{-2^{130}+1,\ldots, 2^{140}-1\}$. Since $y_1 = \frac{y_0+g_1-t_0q_1-t_1q_0}{2^{64}}$, we can check that $y_1$ is in the range $\{-2^{66}+1,\ldots, 2^{76}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_1 + 2^{66}$ is in the range $\{0,1,\ldots,2^{77}-1\}$.
+  \item $y_1+g_2-t_0q_2-t_1q_1$ is in the range $\{-2^{130}+1,\ldots, 2^{140}-1\}$. Since $y_2 = \frac{y_1+g_2-t_0q_2-t_1q_1}{2^{64}}$, we can check that $y_2$ is in the range $\{-2^{66}+1,\ldots, 2^{76}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_2 + 2^{66}$ is in the range $\{0,1,\ldots,2^{77}-1\}$.
+  \item $y_2+g_3-t_0q_3-t_1q_2$ is in the range $\{-2^{130}+1,\ldots, 2^{140}-1\}$. Since $y_3 = \frac{y_2+g_3-t_0q_3-t_1q_2}{2^{64}}$, we can check that $y_3$ is in the range $\{-2^{66}+1,\ldots, 2^{76}-1\}$. In the arithmetic circuit, this is accomplished by checking that $y_3 + 2^{66}$ is in the range $\{0,1,\ldots,2^{77}-1\}$.
 \end{itemize}
-To simplify the arithmetic circuit logic (at least initially), the range checks on all the $y_i$'s can be for the range $\{-2^{75}+1,\ldots, 2^{75}-1\}$. Later the range check on $y_0$ can be for the smaller range $\{-2^{74}+1,\ldots,2^{74}-1\}$.
 
-A range check for an $n$-bit range costs $n$ R1CS constraints. In the above list, there are 4 range checks costing a total of $75 + 4 \times 76 = 303$ constraints. The above check has to be done two times, once each for the two quadratic expressions. So the range checks for carries in quadratic expression reductions alone would cost 606 constraints.
+A range check for an $n$-bit range costs $n$ R1CS constraints. In the above list, there are 4 range checks costing a total of $76 + 3 \times 77 = 307$ constraints. The above check has to be done two times, once each for the two quadratic expressions. So the range checks for carries in quadratic expression reductions alone would cost 614 constraints.
 
-The range checks for carries in cubic reductions cost 1428 constraints. So the total range checks would cost 2034 constraints.
+The range checks for carries in cubic reductions cost 1284 constraints. So the total range checks would cost 1898 constraints.
 \section{An Approach using Eight 32-bit Limbs}%
 \label{sec:an_approach_using_eight_32_bit_limbs}
 Unreduced representations of sextic products using eight 32-bit limbs can be safely calculated in fields with capacity 253 bits. The bitwidth growth of this case is illustrated in Table \ref{tab:limb32}. But we also have to account for the bitwidth growth due to the folding operations. These will be considered in the subsequent sections.
@@ -979,7 +989,7 @@ We could reduce the number of range checks by checking that $g-tq-r$ equals zero
 
 Note that the limbs of $g-tq-r$ can have negative values, i.e. they can experience underflows during the subtraction operation. We use the convention that $x \in \mathbb{F}_n$ is \textit{negative} if $x > \frac{n-1}{2}$.  For example, $h_0-t_0q_0-r_0$ can be a negative multiple of $2^{85}$.
 
-As $h_0, h_1, h_2$ have maximum bitwidths of 177, 176, and 172, $t_0, q_0, q_1, q_2, r_0, r_1, r_2$ having maximum bitwidth of 85, and $t_1$ having a maximum bitwidth of 4, the following terms (the unreduced limbs of $g-tq-r$) lie in the range indicated next to them.
+As $h_0, h_1, h_2$ have maximum bitwidths of 177, 176, and 172, $t_0, q_0, q_1, q_2, r_0, r_1, r_2$ have maximum bitwidths of 85, and $t_1$ has a maximum bitwidth of 4, the following terms (the unreduced limbs of $g-tq-r$) lie in the range indicated next to them.
 \begin{align*}
   & h_0 - t_0q_0-r_0 & \in \{-2^{171}+1, 2^{177}-1\},\\
   & h_1 - t_0q_1-t_1q_0-r_1 & \in \{-2^{171}+1, 2^{176}-1\},\\
