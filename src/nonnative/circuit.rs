@@ -554,11 +554,14 @@ where
         })
     }
 
+    // The ith carry lies between -2^carry_lb_bitwidth+1 and
+    // 2^carry_ub_bitwidth-1
     pub fn check_difference_is_zero<CS: ConstraintSystem<F>>(
         self,
         cs: &mut CS,
         other: &Self,
-        max_limb_bitwidth: usize,
+        carry_ub_bitwidth: Vec<usize>,
+        carry_lb_bitwidth: Vec<usize>,
         base_bitwidth: usize,
     ) -> Result<(), SynthesisError> {
         let diff = self - other;
@@ -567,16 +570,19 @@ where
         }
         let diff_value = diff.value.unwrap();
         let diff_len = diff.limbs.len();
+        assert_eq!(carry_ub_bitwidth.len(), diff_len-1);
+        assert_eq!(carry_lb_bitwidth.len(), diff_len-1);
+
         let mut carries: Vec<F> = vec![F::zero(); diff_len-1];
         let mut carry_variables: Vec<Variable> = vec![];
         let exp = BigUint::from(base_bitwidth as u64);
         let base = F::from(2u64).pow_vartime(exp.to_u64_digits());
 
-        assert!(max_limb_bitwidth - base_bitwidth + 1 > 0);
-        let offset = F::from(2u64).pow_vartime(&[(max_limb_bitwidth-base_bitwidth+1) as u64]);
-        let carry_plus_offset_range_bits = max_limb_bitwidth - base_bitwidth + 2;
-
         for i in 0..diff_len-1 {
+            assert!(carry_ub_bitwidth[i] - base_bitwidth > 0);
+            let carry_plus_offset_range_bits = carry_ub_bitwidth[i] - base_bitwidth + 1;
+            let offset = F::from(2u64).pow_vartime(&[(carry_lb_bitwidth[i]-base_bitwidth) as u64]);
+
             if i == 0 {
                 let limb_bits = diff_value.limbs[0].to_le_bits();
                 let mut coeff = F::one();
@@ -718,7 +724,8 @@ where
         h_l.check_difference_is_zero(
             &mut cs.namespace(|| "checking difference is zero"),
             &tq_plus_r,
-            205,
+            vec![206, 205, 204, 203, 139],
+            vec![129, 131, 131, 131, 130],
             64,
         )?;
         Ok(r)
@@ -784,7 +791,8 @@ where
         g_al.check_difference_is_zero(
             &mut cs.namespace(|| "checking difference is zero"),
             &tq_al,
-            138,
+            vec![139, 140, 140, 140],
+            vec![128, 130, 130, 130],
             64,
         )
     }
@@ -849,7 +857,8 @@ where
         g_al.check_difference_is_zero(
             &mut cs.namespace(|| "checking difference is zero"),
             &tq_al,
-            138,
+            vec![139, 140, 140, 140],
+            vec![128, 130, 130, 130],
             64,
         )
     }
@@ -1485,7 +1494,8 @@ mod tests {
         let res = ab_folded.check_difference_is_zero(
             &mut cs.namespace(|| "check difference is zero"),
             &tq_plus_r,
-            138,
+            vec![139, 140, 140, 140],
+            vec![128, 130, 130, 130],
             64,
         );
         assert!(res.is_ok());

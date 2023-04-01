@@ -138,7 +138,7 @@ def verify_cubic_product(a, b, c, prod):
     assert(h % q == r)
 
     t = (h - r) // q # quotient
-    assert(t < 2**138)
+    assert(t < 2**141)
     assert(h == t*q+r)
 
     t_l = calc_limbs(t, 3)
@@ -161,9 +161,9 @@ def verify_x_coordinate_quadratic_is_zero(x1, x2, y1, y2, x3, v):
     y2_l = calc_limbs(y2, 4)
     v_l = calc_limbs(v, 4)
     q_l = calc_limbs(q, 4)
-    q70_l = [0]*4
+    q71_l = [0]*4
     for i in range(4):
-        q70_l[i] = q_l[i] << 70
+        q71_l[i] = q_l[i] << 71
 
     x1y2_l = fold_quadratic_limbs(calc_quadratic_limbs(x1_l, y2_l))
     x2y1_l = fold_quadratic_limbs(calc_quadratic_limbs(x2_l, y1_l))
@@ -171,7 +171,7 @@ def verify_x_coordinate_quadratic_is_zero(x1, x2, y1, y2, x3, v):
     quad_l = add_ints_unequal_lengths(x1y2_l, x2y1_l)
     quad_l = sub_ints_unequal_lengths(quad_l, x3_l)
     quad_l = sub_ints_unequal_lengths(quad_l, x3v_l)
-    g_l = add_ints_unequal_lengths(quad_l, q70_l)
+    g_l = add_ints_unequal_lengths(quad_l, q71_l)
 
     g = limbs_to_int(g_l)
     assert(g > 0)
@@ -193,9 +193,9 @@ def verify_y_coordinate_quadratic_is_zero(x1, x2, y1, y2, y3, v):
     y3_l = calc_limbs(y3, 4)
     v_l = calc_limbs(v, 4)
     q_l = calc_limbs(q, 4)
-    q70_l = [0]*4
+    q71_l = [0]*4
     for i in range(4):
-        q70_l[i] = q_l[i] << 70
+        q71_l[i] = q_l[i] << 71
 
 
     x1x2_l = fold_quadratic_limbs(calc_quadratic_limbs(x1_l, x2_l))
@@ -204,7 +204,7 @@ def verify_y_coordinate_quadratic_is_zero(x1, x2, y1, y2, y3, v):
     quad_l = add_ints_unequal_lengths(x1x2_l, y1y2_l)
     quad_l = add_ints_unequal_lengths(quad_l, y3v_l)
     quad_l = sub_ints_unequal_lengths(quad_l, y3_l)
-    g_l = add_ints_unequal_lengths(quad_l, q70_l)
+    g_l = add_ints_unequal_lengths(quad_l, q71_l)
 
     g = limbs_to_int(g_l)
     assert(g > 0)

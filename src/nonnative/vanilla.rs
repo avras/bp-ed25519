@@ -262,7 +262,7 @@ where
         assert_eq!(BigUint::from(&cubic_limbed_int).rem(&q), r);
 
         let t = (h-r.clone()) / (q.clone());
-        assert!(t < one << 140);
+        assert!(t < one << 141);
         
         let q_l = Self::from(&q);
         let mut t_l = Self::from(&t);
@@ -286,17 +286,17 @@ where
         let one = BigUint::from(1u64);
         let q: BigUint = (one.clone() << 255) - BigUint::from(19u64);
         let q_l = Self::from(&q);
-        let mut q70_l = Self::default();
+        let mut q71_l = Self::default();
         let two = F::from(2u64);
-        let two_power_70 = two.pow_vartime(&[70u64]);
+        let two_power_71 = two.pow_vartime(&[71u64]);
         for i in 0..q_l.len() {
-            q70_l.limbs[i] = q_l.limbs[i] * two_power_70;
+            q71_l.limbs[i] = q_l.limbs[i] * two_power_71;
         }
 
         let x1y2_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(x1, y2));
         let x2y1_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(x2, y1));
         let x3v_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(x3, v));
-        let g_l = x1y2_l + x2y1_l - x3.clone() - x3v_l  + q70_l;
+        let g_l = x1y2_l + x2y1_l - x3.clone() - x3v_l  + q71_l;
 
         let g = BigUint::from(&g_l);
         assert!(g.clone().rem(q.clone()).is_zero());
@@ -322,17 +322,17 @@ where
         let one = BigUint::from(1u64);
         let q: BigUint = (one.clone() << 255) - BigUint::from(19u64);
         let q_l = Self::from(&q);
-        let mut q70_l = Self::default();
+        let mut q71_l = Self::default();
         let two = F::from(2u64);
-        let two_power_70 = two.pow_vartime(&[70u64]);
+        let two_power_71 = two.pow_vartime(&[71u64]);
         for i in 0..q_l.len() {
-            q70_l.limbs[i] = q_l.limbs[i] * two_power_70;
+            q71_l.limbs[i] = q_l.limbs[i] * two_power_71;
         }
 
         let x1x2_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(x1, x2));
         let y1y2_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(y1, y2));
         let y3v_l = Self::fold_quadratic_limbs(&Self::calc_quadratic_limbs(y3, v));
-        let g_l = x1x2_l + y1y2_l + y3v_l - y3.clone()  + q70_l;
+        let g_l = x1x2_l + y1y2_l + y3v_l - y3.clone()  + q71_l;
 
         let g = BigUint::from(&g_l);
         assert!(g.clone().rem(q.clone()).is_zero());

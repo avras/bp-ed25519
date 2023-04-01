@@ -156,7 +156,7 @@ def verify_cubic_product(a, b, c, prod):
     r_bigint = int(r)
 
     t_bigint = (h_bigint - r_bigint) // q # quotient
-    assert(t_bigint < 2**140)
+    assert(t_bigint < 2**141)
     assert(h_bigint == t_bigint*q+r_bigint)
 
     t_l = calc_native_limbs(t_bigint, 3)
@@ -180,9 +180,9 @@ def verify_x_coordinate_quadratic_is_zero(x1, x2, y1, y2, x3, v):
     y2_l = calc_native_limbs(y2, 4)
     v_l = calc_native_limbs(v, 4)
     q_l = calc_native_limbs(q, 4)
-    q70_l = [0]*4
+    q71_l = [0]*4
     for i in range(4):
-        q70_l[i] = q_l[i] << 70
+        q71_l[i] = q_l[i] << 71
 
     x1y2_l = fold_quadratic_native_limbs_unreduced(calc_quadratic_native_limbs(x1_l, y2_l))
     x2y1_l = fold_quadratic_native_limbs_unreduced(calc_quadratic_native_limbs(x2_l, y1_l))
@@ -190,7 +190,7 @@ def verify_x_coordinate_quadratic_is_zero(x1, x2, y1, y2, x3, v):
     quad_l = add_native_limbed_ints_unequal_lengths(x1y2_l, x2y1_l)
     quad_l = sub_native_limbed_ints_unequal_lengths(quad_l, x3_l)
     quad_l = sub_native_limbed_ints_unequal_lengths(quad_l, x3v_l)
-    g_l = add_native_limbed_ints_unequal_lengths(quad_l, q70_l)
+    g_l = add_native_limbed_ints_unequal_lengths(quad_l, q71_l)
 
     g = native_limbs_to_bigint(g_l)
     assert(g > 0)
@@ -212,9 +212,9 @@ def verify_y_coordinate_quadratic_is_zero(x1, x2, y1, y2, y3, v):
     y3_l = calc_native_limbs(y3, 4)
     v_l = calc_native_limbs(v, 4)
     q_l = calc_native_limbs(q, 4)
-    q70_l = [0]*4
+    q71_l = [0]*4
     for i in range(4):
-        q70_l[i] = q_l[i] << 70
+        q71_l[i] = q_l[i] << 71
 
 
     x1x2_l = fold_quadratic_native_limbs_unreduced(calc_quadratic_native_limbs(x1_l, x2_l))
@@ -223,7 +223,7 @@ def verify_y_coordinate_quadratic_is_zero(x1, x2, y1, y2, y3, v):
     quad_l = add_native_limbed_ints_unequal_lengths(x1x2_l, y1y2_l)
     quad_l = add_native_limbed_ints_unequal_lengths(quad_l, y3v_l)
     quad_l = sub_native_limbed_ints_unequal_lengths(quad_l, y3_l)
-    g_l = add_native_limbed_ints_unequal_lengths(quad_l, q70_l)
+    g_l = add_native_limbed_ints_unequal_lengths(quad_l, q71_l)
 
     g = native_limbs_to_bigint(g_l)
     assert(g > 0)
