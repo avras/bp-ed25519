@@ -5,12 +5,12 @@ use num_bigint::BigUint;
 use num_traits::{Zero, One};
 use crate::{field::Fe25519, curve::{AffinePoint, D}};
 
-
+const NUM_LIMBS: usize = 4;
+const NUM_BITS_PER_LIMB: usize = 64;
 
 #[derive(Debug, Clone)]
 pub struct LimbedInt<F: PrimeField + PrimeFieldBits> {
     pub(crate) limbs: Vec<F>,
-    // limb_width: u32,
 }
 
 impl<F> Default for LimbedInt<F>
@@ -18,7 +18,7 @@ where
     F: PrimeField + PrimeFieldBits
 {
     fn default() -> Self {
-        Self { limbs: vec![F::zero(); 4] }
+        Self { limbs: vec![F::zero(); NUM_LIMBS] }
     }
 }
 
@@ -47,7 +47,7 @@ where
         let mut base: BigUint = one.clone();
         for i in 0..value.len() {
             res += base.clone() * BigUint::from_bytes_le(value.limbs[i].to_repr().as_ref());
-            base = base * (one << 64)
+            base = base * (one << NUM_BITS_PER_LIMB)
         }
         res
     }
@@ -145,8 +145,8 @@ where
 
     pub(crate) fn fold_cubic_limbs(g: &LimbedInt<F>) -> Self {
         let mut h: LimbedInt<F> = LimbedInt::default();
-        assert_eq!(h.len(), 4);
-        assert_eq!(g.len(), 10);
+        assert_eq!(h.len(), NUM_LIMBS);
+        assert_eq!(g.len(), 3*NUM_LIMBS-2);
         let c = F::from(38u64);
         let c2 = F::from(1444);
         h.limbs[0] = g.limbs[0] + c*g.limbs[4] + c2*g.limbs[8];
@@ -171,8 +171,8 @@ where
 
     pub(crate) fn fold_quadratic_limbs(f: &LimbedInt<F>) -> Self {
         let mut h: LimbedInt<F> = LimbedInt::default();
-        assert_eq!(h.len(), 4);
-        assert_eq!(f.len(), 7);
+        assert_eq!(h.len(), NUM_LIMBS);
+        assert_eq!(f.len(), 2*NUM_LIMBS-1);
         let c = F::from(38u64);
         h.limbs[0] = f.limbs[0] + c*f.limbs[4];
         h.limbs[1] = f.limbs[1] + c*f.limbs[5];
@@ -185,7 +185,7 @@ where
     fn check_difference_is_zero(a: LimbedInt<F>, b: LimbedInt<F>) -> bool {
         let diff = a - b;
         let mut carries: Vec<F> = vec![F::zero(); diff.len()-1];
-        let exp64 = BigUint::from(64u64);
+        let exp64 = BigUint::from(NUM_BITS_PER_LIMB as u64);
         let base = F::from(2u64).pow_vartime(exp64.to_u64_digits());
 
         for i in 0..diff.len()-1 {
@@ -208,7 +208,7 @@ where
                 let mut coeff = F::one();
                 // Calculating carries[i] as diff.limbs[i] + carries[i-1] shifted to the right 64 times (discard the 64 LSBs)
                 for (j, bit) in limb_bits.into_iter().enumerate() {
-                    if  j >= 64 {
+                    if  j >= NUM_BITS_PER_LIMB {
                         if bit {
                             carries[i] += coeff;
                         }

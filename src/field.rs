@@ -218,33 +218,6 @@ impl Field for Fe25519 {
         CtOption::new(sq_root, is_sq_root)
     }
 
-    // // https://www.rfc-editor.org/rfc/rfc8032#section-5.1.3
-    // fn sqrt_ratio(u: &Self, v: &Self) -> (Choice, Self) {
-    //     let v_sq = v.square();
-    //     let uv = (*u)*(*v);
-    //     let uv3 = uv * v_sq;
-
-    //     let v_pow4 = v_sq.square();
-    //     let v_pow6 = v_pow4 * v_sq;
-    //     let uv7 = uv * v_pow6;
-
-    //     let five = Fe25519::from(5u64);
-    //     let one_by_eight = Fe25519::from(8u64).invert().unwrap();
-    //     let exponent = (FIELD_MODULUS - five)*one_by_eight;
-    //     let beta = uv3 * uv7.pow(exponent); // candidate square root
-        
-    //     let beta_sq = beta.square();
-    //     let is_sq_root = (*v * beta_sq - *u).is_zero() | (*v * beta_sq + *u).is_zero();
-
-    //     let neg_not_required = (*v * beta_sq - *u).is_zero();
-    //     let sq_root = if bool::from(neg_not_required) {
-    //         beta
-    //     }
-    //     else {
-    //         beta*SQRT_MINUS_ONE
-    //     };
-    //     (is_sq_root, sq_root)
-    // }
 }
 
 impl PrimeField for Fe25519 {
@@ -263,15 +236,9 @@ impl PrimeField for Fe25519 {
         self.0.is_odd()
     }
 
-    // const MODULUS: &'static str = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed";
-
     const NUM_BITS: u32 = 255;
 
     const CAPACITY: u32 = 254;
-
-    // const TWO_INV: Self =
-    //     Self(U256::from_be_hex("3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"));
-
 
     const S: u32 = 2;
 
