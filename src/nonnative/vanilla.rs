@@ -236,12 +236,12 @@ where
         assert_eq!(BigUint::from(&cubic_limbed_int).rem(&q), r);
 
         let t = (h-r.clone()) / (q.clone());
-        assert!(t < one << 140);
+        assert!(t < one << 141);
         
         let mut t_l = Self::from(&t);
-        t_l.pad_limbs(3);
+        t_l.pad_limbs(NUM_LIMBS-1);
         let mut r_l = Self::from(&r);
-        r_l.pad_limbs(4);
+        r_l.pad_limbs(NUM_LIMBS);
 
         (t_l, r_l)
     }
@@ -266,7 +266,7 @@ where
         
         let q_l = Self::from(&q);
         let mut t_l = Self::from(&t);
-        t_l.pad_limbs(3);
+        t_l.pad_limbs(NUM_LIMBS-1);
 
         let tq_l = Self::calc_quadratic_limbs(&t_l, &q_l);
         let tq_plus_r_l = tq_l + prod.clone();
