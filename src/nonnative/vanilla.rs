@@ -401,10 +401,12 @@ where
     F: PrimeField + PrimeFieldBits
 {
     fn from(value: &AffinePoint) -> Self {
-        Self {
-            x: LimbedInt::<F>::from(&value.x),
-            y: LimbedInt::<F>::from(&value.y),
-        }
+        let mut x = LimbedInt::<F>::from(&value.x);
+        let mut y = LimbedInt::<F>::from(&value.y);
+        x.pad_limbs(NUM_LIMBS);
+        y.pad_limbs(NUM_LIMBS);
+
+        Self { x, y }
     }
 }
 
