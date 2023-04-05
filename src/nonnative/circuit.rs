@@ -1,5 +1,6 @@
 use std::ops::{Add, Sub, Mul, Rem};
-use bellperson::{ConstraintSystem, SynthesisError, LinearCombination, Variable, gadgets::boolean::AllocatedBit};
+use bellperson::{ConstraintSystem, SynthesisError, LinearCombination, Variable};
+use bellperson::gadgets::boolean::{AllocatedBit, Boolean};
 use ff::{PrimeField, PrimeFieldBits};
 use num_bigint::BigUint;
 use num_traits::Zero;
@@ -195,6 +196,7 @@ where
         }
     }
 }
+
 pub enum AllocatedOrConstantLimbedInt<F>
 where
     F: PrimeField + PrimeFieldBits
@@ -862,6 +864,44 @@ where
             64,
         )
     }
+
+    // If condition is true, return a. Otherwise return b.
+    // Based on Nova/src/gadgets/utils.rs:conditionally_select
+    fn conditionally_select<CS: ConstraintSystem<F>>(
+        cs: &mut CS,
+        a: &Self,
+        b: &Self,
+        condition: &Boolean,
+    ) -> Result<Self, SynthesisError> {
+        assert!(a.value.is_some());
+        assert!(b.value.is_some());
+        let a_value = a.value.as_ref().unwrap();
+        let b_value = b.value.as_ref().unwrap();
+        assert_eq!(a_value.len(), b_value.len());
+
+        let c = Self::alloc_from_limbed_int(
+            &mut cs.namespace(|| "conditional select result"),
+            if condition.get_value().unwrap() {
+                a_value.clone()
+            } else {
+                b_value.clone()
+            },
+            a_value.len(),
+        )?;
+        
+        // a[i] * condition + b[i]*(1-condition) = c[i] ->
+        // a[i] * condition - b[i]*condition = c[i] - b[i]
+        for i in 0..a_value.len() {
+            cs.enforce(
+                || format!("conditional select constraint on limb {i}"),
+                |lc| lc + &a.limbs[i] - &b.limbs[i],
+                |_| condition.lc(CS::one(), F::one()),
+                |lc| lc + &c.limbs[i] - &b.limbs[i],
+            );
+        }
+        
+        Ok(c)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -968,6 +1008,76 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         Ok(sum)
     }
 
+    pub fn ed25519_scalar_multiplication<CS>(
+        self,
+        cs: &mut CS,
+        scalar: Vec<Boolean>,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>,
+    {
+        assert!(scalar.len() < 256usize); // the largest curve25519 scalar fits in 255 bits
+        let identity: AffinePoint = AffinePoint::default();
+        
+        // No range checks on limbs required as value is known to be (0,1)
+        let mut output = Self::alloc_affine_point(
+            &mut cs.namespace(|| "allocate initial value of output"),
+            identity,
+        )?;
+
+        // Remember to avoid field membership checks before calling this function
+        self.x.check_base_field_membership(
+            &mut cs.namespace(|| "check x coordinate of base point is in base field")
+        )?;
+        self.y.check_base_field_membership(
+            &mut cs.namespace(|| "check y coordinate of base point is in base field")
+        )?;
+
+        let mut step_point = self;
+
+        for (i, bit) in scalar.iter().enumerate() {
+            let output0 = output.clone();
+            let output1 = Self::ed25519_point_addition(
+                &mut cs.namespace(|| format!("sum in step {i} if bit is one")),
+                &output,
+                &step_point,
+            )?;
+
+            let output_value = if bit.get_value().unwrap() {
+                output1.value
+            } else {
+                output0.value
+            };
+
+            let output_x = AllocatedLimbedInt::conditionally_select(
+                &mut cs.namespace(|| format!("conditionally select x coordinate in step {i}")),
+                &output1.x,
+                &output0.x,
+                bit,
+            )?;
+            let output_y = AllocatedLimbedInt::conditionally_select(
+                &mut cs.namespace(|| format!("conditionally select y coordinate in step {i}")),
+                &output1.y,
+                &output0.y,
+                bit,
+            )?;
+
+            output = Self {
+                x: output_x,
+                y: output_y,
+                value: output_value,
+            };
+
+            step_point = Self::ed25519_point_addition(
+                &mut cs.namespace(|| format!("point doubling in step {i}")),
+                &step_point,
+                &step_point,
+            )?;
+        }
+
+        Ok(output)
+    }
+
 }
 
 #[cfg(test)]
@@ -976,7 +1086,7 @@ mod tests {
 
     use super::*;
     use bellperson::gadgets::test::TestConstraintSystem;
-    use crypto_bigint::{U256, Random};
+    use crypto_bigint::{U256, Random, Integer};
     use num_traits::Zero;
     use pasta_curves::Fp;
     use num_bigint::{RandBigInt, BigUint};
@@ -1575,6 +1685,57 @@ mod tests {
     }
 
     #[test]
+    fn alloc_limbed_conditionally_select() {
+        let mut cs = TestConstraintSystem::<Fp>::new();
+        let mut rng = rand::thread_rng();
+        let a_uint = rng.gen_biguint(256u64);
+        let b_uint = rng.gen_biguint(256u64);
+        let a_l = LimbedInt::<Fp>::from(&a_uint);
+        let b_l = LimbedInt::<Fp>::from(&b_uint);
+
+        let a = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc a"),
+            a_l,
+            4
+        );
+        assert!(a.is_ok());
+        let b = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc b"),
+            b_l,
+            4
+        );
+        assert!(b.is_ok());
+        
+        let a = a.unwrap();
+        let b = b.unwrap();
+        
+        let condition = Boolean::constant(true);
+        
+        let c = AllocatedLimbedInt::<Fp>::conditionally_select(
+            &mut cs.namespace(|| "conditionally select"),
+            &a,
+            &b,
+            &condition,
+        );
+        assert!(c.is_ok());
+        let c = c.unwrap();
+
+        let one = TestConstraintSystem::<Fp>::one();
+        for i in 0..c.limbs.len() {
+            cs.enforce(|| format!("c limb {i} equality"),
+                |lc| lc + &c.limbs[i],
+                |lc| lc + one,
+                |lc| lc + &a.limbs[i],
+            );
+        }
+
+        assert!(cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+    }
+
+    #[test]
     fn alloc_affine_point_addition_verification() {
         let b = Ed25519Curve::basepoint();
         let mut rng = rand::thread_rng();
@@ -1609,6 +1770,49 @@ mod tests {
         let sum_al = sum_alloc.unwrap();
 
         assert_eq!(sum_expected_value, sum_al.value);
+
+        assert!(cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+    }
+
+    #[test]
+    fn alloc_affine_scalar_multiplication() {
+        let b = Ed25519Curve::basepoint();
+        let mut rng = rand::thread_rng();
+       
+        let mut scalar = U256::random(&mut rng);
+        scalar = scalar >> 1; // scalar now has 255 significant bits
+        let p = Ed25519Curve::scalar_multiplication(&b, &scalar);
+       
+        let mut scalar_vec: Vec<Boolean> = vec![];
+        for _i in 0..255 {
+            if bool::from(scalar.is_odd()) {
+                scalar_vec.push(Boolean::constant(true))
+            } else {
+                scalar_vec.push(Boolean::constant(false))
+            };
+            scalar = scalar >> 1;
+        }
+
+        let mut cs = TestConstraintSystem::<Fp>::new();
+
+        let b_alloc = AllocatedAffinePoint::alloc_affine_point(
+            &mut cs.namespace(|| "allocate base point"),
+            b,
+        );
+        assert!(b_alloc.is_ok());
+        let b_al = b_alloc.unwrap();
+
+        let p_alloc = b_al.ed25519_scalar_multiplication(
+            &mut cs.namespace(|| "scalar multiplication"),
+            scalar_vec,
+        );
+        assert!(p_alloc.is_ok());
+        let p_al = p_alloc.unwrap();
+
+        assert_eq!(p, p_al.value);
 
         assert!(cs.is_satisfied());
         println!("Num constraints = {:?}", cs.num_constraints());
