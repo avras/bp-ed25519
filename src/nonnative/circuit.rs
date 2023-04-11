@@ -1783,11 +1783,11 @@ mod tests {
         let mut rng = rand::thread_rng();
        
         let mut scalar = U256::random(&mut rng);
-        scalar = scalar >> 1; // scalar now has 255 significant bits
+        scalar = scalar >> 3; // scalar now has 253 significant bits
         let p = Ed25519Curve::scalar_multiplication(&b, &scalar);
        
         let mut scalar_vec: Vec<Boolean> = vec![];
-        for _i in 0..255 {
+        for _i in 0..253 {
             if bool::from(scalar.is_odd()) {
                 scalar_vec.push(Boolean::constant(true))
             } else {
