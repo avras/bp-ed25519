@@ -879,7 +879,7 @@ where
         let b_value = b.value.as_ref().unwrap();
         assert_eq!(a_value.len(), b_value.len());
 
-        let c = Self::alloc_from_limbed_int(
+        let res = Self::alloc_from_limbed_int(
             &mut cs.namespace(|| "conditional select result"),
             if condition.get_value().unwrap() {
                 a_value.clone()
@@ -896,11 +896,97 @@ where
                 || format!("conditional select constraint on limb {i}"),
                 |lc| lc + &a.limbs[i] - &b.limbs[i],
                 |_| condition.lc(CS::one(), F::one()),
-                |lc| lc + &c.limbs[i] - &b.limbs[i],
+                |lc| lc + &res.limbs[i] - &b.limbs[i],
             );
         }
         
-        Ok(c)
+        Ok(res)
+    }
+    // If condition0 + 2*condition1 is i, return ai.
+    // Based on gnark/frontend/cs/r1cs/api.go:Lookup2
+    fn conditionally_select2<CS: ConstraintSystem<F>>(
+        cs: &mut CS,
+        a0: &Self,
+        a1: &Self,
+        a2: &Self,
+        a3: &Self,
+        condition0: &Boolean,
+        condition1: &Boolean,
+    ) -> Result<Self, SynthesisError> {
+        assert!(a0.value.is_some());
+        assert!(a1.value.is_some());
+        assert!(a2.value.is_some());
+        assert!(a3.value.is_some());
+        let a0_value = a0.value.as_ref().unwrap();
+        let a1_value = a1.value.as_ref().unwrap();
+        let a2_value = a2.value.as_ref().unwrap();
+        let a3_value = a3.value.as_ref().unwrap();
+        assert_eq!(a0_value.len(), a1_value.len());
+        assert_eq!(a1_value.len(), a2_value.len());
+        assert_eq!(a2_value.len(), a3_value.len());
+
+        let res_value = match (condition1.get_value().unwrap(), condition0.get_value().unwrap()) {
+            (false, false) => a0_value.clone(),
+            (false,  true) => a1_value.clone(),
+            (true,  false) => a2_value.clone(),
+            (true,   true) => a3_value.clone(),
+        };
+        let res = Self::alloc_from_limbed_int(
+            &mut cs.namespace(|| "conditional select2 result"),
+            res_value,
+            a0_value.len(), // all ai's have the same number of limbs
+        )?;
+
+        let tmp1_value = match condition1.get_value().unwrap() {
+            false => a1_value.clone() - a0_value.clone(),
+            true => a3_value.clone() - a2_value.clone(),
+        };
+        let tmp1 = Self::alloc_from_limbed_int(
+            &mut cs.namespace(|| "conditional select2 tmp1 value"),
+            tmp1_value.clone(),
+            a0_value.len(), // all ai's have the same number of limbs
+        )?;
+
+        let mut zero_value = LimbedInt::<F>::default();
+        zero_value.pad_limbs(a0_value.len());
+
+        let tmp2_value = match condition0.get_value().unwrap() {
+            false => zero_value,
+            true => tmp1_value,
+        };
+        let tmp2 = Self::alloc_from_limbed_int(
+            &mut cs.namespace(|| "conditional select2 tmp2 value"),
+            tmp2_value,
+            a0_value.len(), // all ai's have the same number of limbs
+        )?;
+
+        
+        // Two-bit lookup can be done with three constraints
+        //    (1) (a3 - a2 - a1 + a0) * condition1 = tmp1 - a1 + a0
+        //    (2) tmp1 * condition0 = tmp2
+        //    (3) (a2 - a0) * condition1 = res - tmp2 - a0 
+        for i in 0..a0_value.len() {
+            cs.enforce(
+                || format!("conditional select2 constraint 1 on limb {i}"),
+                |lc| lc + &a3.limbs[i] - &a2.limbs[i] - &a1.limbs[i] + &a0.limbs[i],
+                |_| condition1.lc(CS::one(), F::one()),
+                |lc| lc + &tmp1.limbs[i] - &a1.limbs[i] + &a0.limbs[i],
+            );
+            cs.enforce(
+                || format!("conditional select2 constraint 2 on limb {i}"),
+                |lc| lc + &tmp1.limbs[i],
+                |_| condition0.lc(CS::one(), F::one()),
+                |lc| lc + &tmp2.limbs[i],
+            );
+            cs.enforce(
+                || format!("conditional select2 constraint 3 on limb {i}"),
+                |lc| lc + &a2.limbs[i] - &a0.limbs[i],
+                |_| condition1.lc(CS::one(), F::one()),
+                |lc| lc + &res.limbs[i] - &tmp2.limbs[i] - &a0.limbs[i],
+            );
+        }
+        
+        Ok(res)
     }
 }
 
@@ -1709,27 +1795,123 @@ mod tests {
         let a = a.unwrap();
         let b = b.unwrap();
         
-        let condition = Boolean::constant(true);
-        
-        let c = AllocatedLimbedInt::<Fp>::conditionally_select(
-            &mut cs.namespace(|| "conditionally select"),
-            &a,
-            &b,
-            &condition,
-        );
-        assert!(c.is_ok());
-        let c = c.unwrap();
-
-        let one = TestConstraintSystem::<Fp>::one();
-        for i in 0..c.limbs.len() {
-            cs.enforce(|| format!("c limb {i} equality"),
-                |lc| lc + &c.limbs[i],
-                |lc| lc + one,
-                |lc| lc + &a.limbs[i],
+        let conditions = vec![false, true];
+        for c in conditions {
+            let condition = Boolean::constant(c);
+            
+            let res = AllocatedLimbedInt::<Fp>::conditionally_select(
+                &mut cs.namespace(|| format!("conditionally select a or b for condition = {c}")),
+                &a,
+                &b,
+                &condition,
             );
-        }
+            assert!(res.is_ok());
+            let res = res.unwrap();
 
-        assert!(cs.is_satisfied());
+            let one = TestConstraintSystem::<Fp>::one();
+            let res_expected = if c {
+                a.clone()
+            } else {
+                b.clone()
+            };
+            for i in 0..res.limbs.len() {
+                cs.enforce(|| format!("c limb {i} equality for condition = {c}"),
+                    |lc| lc + &res.limbs[i],
+                    |lc| lc + one,
+                    |lc| lc + &res_expected.limbs[i],
+                );
+            }
+
+            assert!(cs.is_satisfied());
+        }
+        // Note that the number of constraints for one invocation of conditionally_select will be
+        // half the number printed by the below statement minus 4 (the constraints in the test)
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+    }
+
+    #[test]
+    fn alloc_limbed_conditionally_select2() {
+        let mut cs = TestConstraintSystem::<Fp>::new();
+        let mut rng = rand::thread_rng();
+        let a0_uint = rng.gen_biguint(256u64);
+        let a1_uint = rng.gen_biguint(256u64);
+        let a2_uint = rng.gen_biguint(256u64);
+        let a3_uint = rng.gen_biguint(256u64);
+        let a0_l = LimbedInt::<Fp>::from(&a0_uint);
+        let a1_l = LimbedInt::<Fp>::from(&a1_uint);
+        let a2_l = LimbedInt::<Fp>::from(&a2_uint);
+        let a3_l = LimbedInt::<Fp>::from(&a3_uint);
+
+        let a0 = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc a0"),
+            a0_l,
+            4
+        );
+        assert!(a0.is_ok());
+        let a1 = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc a1"),
+            a1_l,
+            4
+        );
+        assert!(a1.is_ok());
+        let a2 = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc a2"),
+            a2_l,
+            4
+        );
+        assert!(a2.is_ok());
+        let a3 = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+            &mut cs.namespace(|| "alloc a3"),
+            a3_l,
+            4
+        );
+        assert!(a3.is_ok());
+        
+        let a0 = a0.unwrap();
+        let a1 = a1.unwrap();
+        let a2 = a2.unwrap();
+        let a3 = a3.unwrap();
+        
+        let conditions = vec![(false, false), (false, true), (true, false), (true, true)];
+        for (c0, c1) in conditions {
+
+            let condition0 = Boolean::constant(c0);
+            let condition1 = Boolean::constant(c1);
+            
+            let res = AllocatedLimbedInt::<Fp>::conditionally_select2(
+                &mut cs.namespace(|| format!("conditionally select2 result for conditions = {c0}, {c1}")),
+                &a0,
+                &a1,
+                &a2,
+                &a3,
+                &condition0,
+                &condition1,
+            );
+            assert!(res.is_ok());
+            let res = res.unwrap();
+
+            let one = TestConstraintSystem::<Fp>::one();
+            let res_expected = match (c0, c1) {
+                (false, false) => a0.clone(),
+                (true, false) => a1.clone(),
+                (false, true) => a2.clone(),
+                (true, true) => a3.clone(),
+            };
+            for i in 0..res.limbs.len() {
+                cs.enforce(|| format!("res limb {i} equality for conditions = {c0}, {c1}"),
+                    |lc| lc + &res.limbs[i],
+                    |lc| lc + one,
+                    |lc| lc + &res_expected.limbs[i],
+                );
+            }
+
+            assert!(cs.is_satisfied());
+        }
+        
+        // Note that the number of constraints for one invocation of conditionally_select2 will be
+        // one-fourth of the number printed by the below statement minus 4 (the constraints in the test)
         println!("Num constraints = {:?}", cs.num_constraints());
         println!("Num inputs = {:?}", cs.num_inputs());
 
