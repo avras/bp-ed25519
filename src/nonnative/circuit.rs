@@ -1019,6 +1019,83 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         Ok(Self { x, y, value })
     }
 
+    fn conditionally_select<CS>(
+        cs: &mut CS,
+        a: &Self,
+        b: &Self,
+        condition: &Boolean,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>,
+    {
+        let x = AllocatedLimbedInt::conditionally_select(
+            &mut cs.namespace(|| "allocate value of output x coordinate"),
+            &a.x,
+            &b.x,
+            condition,
+        )?;
+
+        let y = AllocatedLimbedInt::conditionally_select(
+            &mut cs.namespace(|| "allocate value of output y coordinate"),
+            &a.y,
+            &b.y,
+            condition,
+        )?;
+
+        let c = condition.get_value().unwrap();
+        let value = if c {
+            a.value
+        } else {
+            b.value
+        };
+        
+        Ok(Self { x, y, value })
+    }
+
+    fn conditionally_select2<CS>(
+        cs: &mut CS,
+        a0: &Self,
+        a1: &Self,
+        a2: &Self,
+        a3: &Self,
+        condition0: &Boolean,
+        condition1: &Boolean,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>,
+    {
+        let x = AllocatedLimbedInt::conditionally_select2(
+            &mut cs.namespace(|| "allocate value of output x coordinate"),
+            &a0.x,
+            &a1.x,
+            &a2.x,
+            &a3.x,
+            condition0,
+            condition1,
+        )?;
+
+        let y = AllocatedLimbedInt::conditionally_select2(
+            &mut cs.namespace(|| "allocate value of output y coordinate"),
+            &a0.y,
+            &a1.y,
+            &a2.y,
+            &a3.y,
+            condition0,
+            condition1,
+        )?;
+
+        let c0 = condition0.get_value().unwrap();
+        let c1 = condition1.get_value().unwrap();
+        let value = match (c0, c1) {
+            (false, false) => a0.value,
+            (true,  false) => a1.value,
+            (false, true)  => a2.value,
+            (true,  true)  => a3.value,
+        };
+        
+        Ok(Self { x, y, value })
+    }
+
     fn verify_ed25519_point_addition<CS>(
         cs: &mut CS,
         p: &Self,
@@ -1094,7 +1171,37 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         Ok(sum)
     }
 
-    pub fn ed25519_scalar_multiplication<CS>(
+    pub fn ed25519_point_doubling<CS>(
+        cs: &mut CS,
+        p: &Self,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>,
+    {
+        let sum_value = p.value + p.value;
+        let sum = Self::alloc_affine_point(
+            &mut cs.namespace(|| "allocate sum"),
+            sum_value,
+        )?;
+
+        sum.x.check_base_field_membership(
+            &mut cs.namespace(|| "check x coordinate of sum is in base field")
+        )?;
+        sum.y.check_base_field_membership(
+            &mut cs.namespace(|| "check y coordinate of sum is in base field")
+        )?;
+
+        Self::verify_ed25519_point_addition(
+            &mut cs.namespace(|| "verify point addition"),
+            p,
+            p,
+            &sum,
+        )?;
+
+        Ok(sum)
+    }
+
+    pub fn ed25519_scalar_multiplication_old<CS>(
         self,
         cs: &mut CS,
         scalar: Vec<Boolean>,
@@ -1102,7 +1209,7 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
     where
         CS: ConstraintSystem<F>,
     {
-        assert!(scalar.len() < 256usize); // the largest curve25519 scalar fits in 255 bits
+        assert!(scalar.len() < 254usize); // the largest curve25519 scalar fits in 253 bits
         let identity: AffinePoint = AffinePoint::default();
         
         // No range checks on limbs required as value is known to be (0,1)
@@ -1159,6 +1266,106 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
                 &step_point,
                 &step_point,
             )?;
+        }
+
+        Ok(output)
+    }
+
+    pub fn ed25519_scalar_multiplication<CS>(
+        self,
+        cs: &mut CS,
+        scalar: Vec<Boolean>,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>,
+    {
+        let scalar_len = scalar.len();
+        assert!(scalar_len < 254usize); // the largest curve25519 scalar fits in 253 bits
+        let identity: AffinePoint = AffinePoint::default();
+        
+        // No range checks on limbs required as value is known to be (0,1)
+        let identity_point = Self::alloc_affine_point(
+            &mut cs.namespace(|| "allocate identity point"),
+            identity,
+        )?;
+        // Remember to avoid field membership checks before calling this function
+        self.x.check_base_field_membership(
+            &mut cs.namespace(|| "check x coordinate of base point is in base field")
+        )?;
+        self.y.check_base_field_membership(
+            &mut cs.namespace(|| "check y coordinate of base point is in base field")
+        )?;
+
+
+        let a = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate double the base"),
+            &self,
+        )?;
+        let b = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate three times the base"),
+            &a,
+            &self,
+        )?;
+        let n = scalar_len - 1;
+        assert!(n > 1);
+
+        let mut output = Self::conditionally_select2(
+            &mut cs.namespace(|| "allocate initial value of output"),
+            &identity_point,
+            &self,
+            &a,
+            &b,
+            &scalar[n-1],
+            &scalar[n]
+        )?;
+            
+        let mut i = n-2;
+        while i > 0 {
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| format!("first doubling in iteration {i}")),
+                &output,
+            )?;
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| format!("second doubling in iteration {i}")),
+                &output,
+            )?;
+
+            let tmp = Self::conditionally_select2(
+                &mut cs.namespace(|| format!("allocate tmp value in iteration {i}")),
+                &identity_point,
+                &self,
+                &a,
+                &b,
+                &scalar[i-1],
+                &scalar[i]
+            )?;
+
+            output = Self::ed25519_point_addition(
+                &mut cs.namespace(|| format!("allocate sum of output and tmp in iteration {i}")),
+                &output,
+                &tmp,
+            )?;
+                
+            i = i-2;
+        }
+
+        if n % 2 == 0 {
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| "final doubling of output"),
+                &output,
+            )?;
+            let tmp = Self::ed25519_point_addition(
+                &mut cs.namespace(|| "final sum of output and base"),
+                &output,
+                &self,
+            )?;
+            output = Self::conditionally_select(
+                cs,
+                &tmp,
+                &output,
+                &scalar[0],
+            )?;
+            
         }
 
         Ok(output)
@@ -1960,7 +2167,50 @@ mod tests {
     }
 
     #[test]
-    fn alloc_affine_scalar_multiplication() {
+    fn alloc_affine_scalar_multiplication_window1() {
+        let b = Ed25519Curve::basepoint();
+        let mut rng = rand::thread_rng();
+       
+        let mut scalar = U256::random(&mut rng);
+        scalar = scalar >> 3; // scalar now has 253 significant bits
+        let p = Ed25519Curve::scalar_multiplication(&b, &scalar);
+       
+        let mut scalar_vec: Vec<Boolean> = vec![];
+        for _i in 0..253 {
+            if bool::from(scalar.is_odd()) {
+                scalar_vec.push(Boolean::constant(true))
+            } else {
+                scalar_vec.push(Boolean::constant(false))
+            };
+            scalar = scalar >> 1;
+        }
+
+        let mut cs = TestConstraintSystem::<Fp>::new();
+
+        let b_alloc = AllocatedAffinePoint::alloc_affine_point(
+            &mut cs.namespace(|| "allocate base point"),
+            b,
+        );
+        assert!(b_alloc.is_ok());
+        let b_al = b_alloc.unwrap();
+
+        let p_alloc = b_al.ed25519_scalar_multiplication_old(
+            &mut cs.namespace(|| "scalar multiplication"),
+            scalar_vec,
+        );
+        assert!(p_alloc.is_ok());
+        let p_al = p_alloc.unwrap();
+
+        assert_eq!(p, p_al.value);
+
+        assert!(cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+    }
+
+    #[test]
+    fn alloc_affine_scalar_multiplication_window2() {
         let b = Ed25519Curve::basepoint();
         let mut rng = rand::thread_rng();
        
