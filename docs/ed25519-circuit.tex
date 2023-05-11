@@ -27,7 +27,7 @@ The identity element is the point $(0,1)$. The above addition law works even whe
 \label{sec:verifying_point_addition}
 In the context of SNARKs, we are concerned with verifying that three points $P, Q, R \in E$ satisfy $R= P+Q$ using an arithmetic circuit. The main challenge is the representation of the arithmetic over $\mathbb{F}_q$ using field elements from a different finite field $\mathbb{F}_n$. The field $\mathbb{F}_n$ is called the \textit{native field} and the arithmetic over $\mathbb{F}_q$ is called \textit{non-native arithmetic}.
 
-A few popular choices for the native field have $r$ either equal to a 254-bit prime or a 255-bit prime. The \textit{capacity} of such fields is then atmost 253 bits, i.e.~they can represent any integer in the range $\{0,1,\ldots,2^{253}-1\}$. In this document, we exclusively focus on this case.
+A few popular choices for the native field have $n$ either equal to a 254-bit prime or a 255-bit prime. The \textit{capacity} of such fields is then atmost 253 bits, i.e.~they can represent any integer in the range $\{0,1,\ldots,2^{253}-1\}$. In this document, we exclusively focus on this case.
 
 An element of $\mathbb{F}_q$ requires 255 bits and hence cannot be expressed a single element of $\mathbb{F}_n$. While two elements of $\mathbb{F}_n$ suffice to represent an element of $\mathbb{F}_q$, we will use more than two to allow the representations of products of $\mathbb{F}_q$ elements.
 
@@ -84,35 +84,35 @@ There does not seem any way to reduce the degree of the products in the point ad
 
 The maximum limb bitwidth such that a product of six limbs fits in 253 bits is 42, as $6\times 42 = 252$. But this will not accommodate carries.
 
-In general, the product between $a = \sum_{i=0}^{k_a-1}a_i 2^{\eta i}$ and $b= \sum_{i=0}^{k_b-1}b_i 2^{\eta i}$ will have $k_a+k_b-1$ limbs each having a maximum bitwidth of $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ where the $a_i$'s have bitwidth $m_a$ and the $b_i$'s have bitwidth $m_b$.
+In general, the product between $a = \sum_{i=0}^{k_a-1}a_i 2^{\eta i}$ and $b= \sum_{i=0}^{k_b-1}b_i 2^{\eta i}$ will have $k_a+k_b-1$ limbs each having a maximum bitwidth of $m_a+m_b+\left\lceil \log_2 \left( \min\left( k_a, k_b \right) \right) \right\rceil$ where the $a_i$'s have bitwidth $m_a$ and the $b_i$'s have bitwidth $m_b$.
 
 We would need 7 limbs each having bitwidth equal to 42 to represent an $\mathbb{F}_q$ element (as $6\times 42 = 252 < 255 < 294 = 7\times 42$). Setting $k_a=k_b =7$ shows that even a degree 2 product will require 3 bits to accomodate carries. A degree 6 product of $\mathbb{F}_q$ elements represented using 42-bit limbs from $\mathbb{F}_n$ will have overflow in its unreduced representation.
 
-Let us now consider the case of 41-bit limbs. We again need 7 limbs to represent an $\mathbb{F}_q$ element as $255 < 287 = 7\times 41$. A degree 6 product of 7-limbed terms with 41 bits per limb will need 268 bits to products and carries in the unreduced representation. The calculations are illustrated in Table \ref{tab:limb41}.
+Let us now consider the case of 41-bit limbs. We again need 7 limbs to represent an $\mathbb{F}_q$ element as $255 < 287 = 7\times 41$. A degree 6 product of 7-limbed terms with 41 bits per limb will need 261 bits to products and carries in the unreduced representation. The calculations are illustrated in Table \ref{tab:limb41}.
 \begin{table}[h]
   \centering
   \begin{tabular}{c|c|c|c|c|c|c}
-    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \min\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
     $z_1$ & $z_2$ & 41 & 41 & 7 & 7 & 85 \\ \hline
-    $z_1z_2$ & $z_3$ & 85 & 41 & 13 & 7 & 130 \\ \hline
-    $z_1z_2z_3$ & $z_4$ & 130 & 41 & 19 & 7 & 176 \\ \hline
-    $z_1z_2z_3z_4$ & $z_5$ & 176 & 41 & 25 & 7 & 222 \\ \hline
-    $z_1z_2z_3z_4z_5$ & $z_6$ & 222 & 41 & 31 & 7 & 268 \\ \hline
+    $z_1z_2$ & $z_3$ & 85 & 41 & 13 & 7 & 129 \\ \hline
+    $z_1z_2z_3$ & $z_4$ & 129 & 41 & 19 & 7 & 173 \\ \hline
+    $z_1z_2z_3z_4$ & $z_5$ & 173 & 41 & 25 & 7 & 217 \\ \hline
+    $z_1z_2z_3z_4z_5$ & $z_6$ & 217 & 41 & 31 & 7 & 261 \\ \hline
   \end{tabular}
   \caption{Bitwidth growth for products of terms with 7 limbs of 41 bits each}
   \label{tab:limb41}
 \end{table}
 
-A degree 6 product of 7-limbed terms with 40 bits per limb will need 262 bits to products and carries in the unreduced representation. The calculations are illustrated in Table \ref{tab:limb40}.
+A degree 6 product of 7-limbed terms with 40 bits per limb will need 255 bits to products and carries in the unreduced representation. The calculations are illustrated in Table \ref{tab:limb40}.
 \begin{table}[h]
   \centering
   \begin{tabular}{c|c|c|c|c|c|c}
-    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \min\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
     $z_1$ & $z_2$ & 40 & 40 & 7 & 7 & 83 \\ \hline
-    $z_1z_2$ & $z_3$ & 83 & 40 & 13 & 7 & 127 \\ \hline
-    $z_1z_2z_3$ & $z_4$ & 127 & 40 & 19 & 7 & 172 \\ \hline
-    $z_1z_2z_3z_4$ & $z_5$ & 172 & 40 & 25 & 7 & 217 \\ \hline
-    $z_1z_2z_3z_4z_5$ & $z_6$ & 217 & 40 & 31 & 7 & 262 \\ \hline
+    $z_1z_2$ & $z_3$ & 83 & 40 & 13 & 7 & 126 \\ \hline
+    $z_1z_2z_3$ & $z_4$ & 126 & 40 & 19 & 7 & 169 \\ \hline
+    $z_1z_2z_3z_4$ & $z_5$ & 169 & 40 & 25 & 7 & 212 \\ \hline
+    $z_1z_2z_3z_4z_5$ & $z_6$ & 212 & 40 & 31 & 7 & 255 \\ \hline
   \end{tabular}
   \caption{Bitwidth growth for products of terms with 7 limbs of 40 bits each}
   \label{tab:limb40}
@@ -122,33 +122,18 @@ A degree 6 product of 7-limbed terms with 39 bits per limb will need 256 bits to
 \begin{table}[h]
   \centering
   \begin{tabular}{c|c|c|c|c|c|c}
-    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \min\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
     $z_1$ & $z_2$ & 39 & 39 & 7 & 7 & 81 \\ \hline
-    $z_1z_2$ & $z_3$ & 81 & 39 & 13 & 7 & 124 \\ \hline
-    $z_1z_2z_3$ & $z_4$ & 124 & 39 & 19 & 7 & 168 \\ \hline
-    $z_1z_2z_3z_4$ & $z_5$ & 168 & 39 & 25 & 7 & 212 \\ \hline
-    $z_1z_2z_3z_4z_5$ & $z_6$ & 212 & 39 & 31 & 7 & 256 \\ \hline
+    $z_1z_2$ & $z_3$ & 81 & 39 & 13 & 7 & 123 \\ \hline
+    $z_1z_2z_3$ & $z_4$ & 123 & 39 & 19 & 7 & 165 \\ \hline
+    $z_1z_2z_3z_4$ & $z_5$ & 165 & 39 & 25 & 7 & 207 \\ \hline
+    $z_1z_2z_3z_4z_5$ & $z_6$ & 207 & 39 & 31 & 7 & 249 \\ \hline
   \end{tabular}
   \caption{Bitwidth growth for products of terms with 7 limbs of 39 bits each}
   \label{tab:limb39}
 \end{table}
 
-A degree 6 product of 7-limbed terms with 38 bits per limb will need 261 bits to products and carries in the unreduced representation. The calculations are illustrated in Table \ref{tab:limb38}.
-\begin{table}[h]
-  \centering
-  \begin{tabular}{c|c|c|c|c|c|c}
-    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
-    $z_1$ & $z_2$ & 38 & 38 & 7 & 7 & 79 \\ \hline
-    $z_1z_2$ & $z_3$ & 79 & 38 & 13 & 7 & 121 \\ \hline
-    $z_1z_2z_3$ & $z_4$ & 121 & 38 & 19 & 7 & 164 \\ \hline
-    $z_1z_2z_3z_4$ & $z_5$ & 164 & 38 & 25 & 7 & 207 \\ \hline
-    $z_1z_2z_3z_4z_5$ & $z_6$ & 207 & 38 & 31 & 7 & 250 \\ \hline
-  \end{tabular}
-  \caption{Bitwidth growth for products of terms with 7 limbs of 38 bits each}
-  \label{tab:limb38}
-\end{table}
-
-While it is possible to use 38-bit limbs to safely calculate the unreduced representation of a degree 6 product, the circuit logic can be quite complex. It seems prudent to try a simpler approach first, even if it is inefficient in terms of arithmetic circuit size.
+While it is possible to use 39-bit limbs to safely calculate the unreduced representation of a degree 6 product, the circuit logic can be quite complex. It seems prudent to try a simpler approach first, even if it is inefficient in terms of arithmetic circuit size.
 
 \newpage
 \section{An Approach using Four 64-bit Limbs}%
@@ -157,11 +142,11 @@ Unreduced representations of cubic products using four 64-bit limbs can be safel
 \begin{table}[h]
   \centering
   \begin{tabular}{c|c|c|c|c|c|c}
-    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \min\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
     $z_1$ & $z_2$ & 64 & 64 & 4 & 4 & 130 \\ \hline
-    $z_1z_2$ & $z_3$ & 130 & 64 & 7 & 4 & 197 \\ \hline
+    $z_1z_2$ & $z_3$ & 130 & 64 & 7 & 4 & 196 \\ \hline
   \end{tabular}
-  \caption{Bitwidth growth for products of terms with 7 limbs of 38 bits each}
+  \caption{Bitwidth growth for products of terms with 4 limbs of 64 bits each}
   \label{tab:limb64}
 \end{table}
 
@@ -508,12 +493,12 @@ Unreduced representations of sextic products using eight 32-bit limbs can be saf
 \begin{table}[h]
   \centering
   \begin{tabular}{c|c|c|c|c|c|c}
-    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \max\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
+    $a$ & $b$ & $m_a$ & $m_b$ & $k_a$ & $k_b$ & $m_a+m_b+\left\lceil \log_2 \left( \min\left( k_a, k_b \right) \right) \right\rceil$ \\ \hline
     $z_1$ & $z_2$ & 32 & 32 & 8 & 8 & 67 \\ \hline
-    $z_1z_2$ & $z_3$ & 67 & 32 & 15 & 8 & 103 \\ \hline
-    $z_1z_2z_3$ & $z_4$ & 103 & 32 & 22 & 8 & 140 \\ \hline
-    $z_1z_2z_3z_4$ & $z_5$ & 140 & 32 & 29 & 8 & 177 \\ \hline
-    $z_1z_2z_3z_4z_5$ & $z_6$ & 177 & 32 & 36 & 8 & 215 \\ \hline
+    $z_1z_2$ & $z_3$ & 67 & 32 & 15 & 8 & 102 \\ \hline
+    $z_1z_2z_3$ & $z_4$ & 102 & 32 & 22 & 8 & 137 \\ \hline
+    $z_1z_2z_3z_4$ & $z_5$ & 137 & 32 & 29 & 8 & 172 \\ \hline
+    $z_1z_2z_3z_4z_5$ & $z_6$ & 172 & 32 & 36 & 8 & 207 \\ \hline
   \end{tabular}
   \caption{Bitwidth growth for products of terms with 8 limbs of 32 bits each}
   \label{tab:limb32}
@@ -543,7 +528,7 @@ In (\ref{eqn1}), the term $-x_1y_2-x_2y_1$ can contribute negative values. We ca
 \end{align}
 and ensure that the terms in the LHS sum to a non-negative value. But it turns out that we do not need to add $2q^2$ to the LHS. We can add a much smaller number. As shown in the next section, once we fold products like $x_1y_2$ their magnitude is bounded by $2^{292}$. As $q > 2^{254}$, $2^{38}q - x_1y_2$ is guaranteed to be non-negative. So we can rewrite (\ref{eqn1}) as 
 \begin{align}
-  dx_1x_2x_3y_1y_2 + x_3 + 2^{39}q - x_1y_2 - x_2y_1  &= 0 \bmod q,\label{eqn5}
+  dx_1x_2x_3y_1y_2 + x_3 + 2^{38}q - x_1y_2 - x_2y_1  &= 0 \bmod q,\label{eqn5}
 \end{align}
 and ensure that the terms in the LHS sum to a non-negative value.
 
@@ -755,11 +740,11 @@ Based on these bitwidths, we note the following:
 Recall the point verification equations from (\ref{eqn3}) and (\ref{eqn5}).
 \begin{align}
   dx_1x_2y_1y_2y_3 + (q - y_3) + x_1x_2 + y_1y_2 &= 0 \bmod q,\label{eqn6}\\
-  dx_1x_2x_3y_1y_2 + x_3 + 2^{39}q - x_1y_2 - x_2y_1  &= 0 \bmod q.\label{eqn7}
+  dx_1x_2x_3y_1y_2 + x_3 + 2^{38}q - x_1y_2 - x_2y_1  &= 0 \bmod q.\label{eqn7}
 \end{align}
 In (\ref{eqn6}), the products $x_1x_2$ and $y_1y_2$ will be bounded by $2^{292}$ after folding (see end of Section \ref{subsec:folding_a_quadratic_product}). The term $q-y_3$ will be bounded by $2^{255}$. And finally, the sextic term $dx_1x_2y_1y_2y_3$ will be bounded by $2^{462}$ after folding (see end of Section \ref{subsec:folding_a_sextic_product}). So the LHS in (\ref{eqn6}) will be bounded by $2^{463}$.
 
-In (\ref{eqn7}), once the folded versions of $x_1y_2$ and $x_2y_1$ are deducted from $2^{39}q$ the remaining value is non-negative. The term $2^{39}q-x_1y_2-x_2y_1$ will be bounded by $2^{294}$. The term $x_3$ will be bounded by $2^{255}$. And finally, the sextic term $dx_1x_2x_3y_1y_2$ will be bounded by $2^{462}$ after folding (see end of Section \ref{subsec:folding_a_sextic_product}). So the LHS in (\ref{eqn6}) will be bounded by $2^{463}$.
+In (\ref{eqn7}), once the folded versions of $x_1y_2$ and $x_2y_1$ are deducted from $2^{38}q$ the remaining value is non-negative. The term $2^{38}q-x_1y_2-x_2y_1$ will be bounded by $2^{293}$. The term $x_3$ will be bounded by $2^{255}$. And finally, the sextic term $dx_1x_2x_3y_1y_2$ will be bounded by $2^{462}$ after folding (see end of Section \ref{subsec:folding_a_sextic_product}). So the LHS in (\ref{eqn6}) will be bounded by $2^{463}$.
 
 Let $s$ denote either of the LHS terms of (\ref{eqn6}) and (\ref{eqn7}) after folding. Let the unreduced representation of $s$ be
 \begin{align*}
@@ -772,7 +757,7 @@ Each limb $s_i$ will be (conservatively) in the range $\{-2^{74}+1, 2^{244}-1\}$
   \item The limbs of $-y_3$ are in the range $\{-2^{64}+1,\ldots,0\}$.
   \item The limbs of $x_1x_2$ and $y_1y_2$ after folding are in the range $\{0,1,\ldots,2^{73}-1\}$. So their sum will have limbs in the range $\{0,1,\ldots,2^{74}-2\}$.
   \item The limbs of $x_1y_2$ and $x_2y_1$ after folding are in the range $\{0,1,\ldots,2^{73}-1\}$. So their sum will have limbs in the range $\{0,1,\ldots,2^{74}-2\}$. And their negation $-x_1y_2-x_2y_1$ will have limbs in the range $\{-2^{74}+2,\ldots,0\}$
-  \item The limbs of $2^{39}q$ will be in the range $\{0,1,\ldots,2^{103}-1\}$.
+  \item The limbs of $2^{38}q$ will be in the range $\{0,1,\ldots,2^{102}-1\}$.
 \end{itemize}
 
 
