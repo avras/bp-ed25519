@@ -3,7 +3,7 @@
 .vscode
 *.py
 __pycache__
-
+.DS_Store
 # LaTeX-specific ignored files
 *.pdf
 *.aux
