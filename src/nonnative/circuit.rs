@@ -1,6 +1,7 @@
 use std::ops::{Add, Sub, Mul, Rem};
 use bellperson::{ConstraintSystem, SynthesisError, LinearCombination, Variable};
 use bellperson::gadgets::boolean::{AllocatedBit, Boolean};
+use bellperson::gadgets::num::AllocatedNum;
 use ff::{PrimeField, PrimeFieldBits};
 use num_bigint::BigUint;
 use num_traits::Zero;
@@ -988,7 +989,119 @@ where
         
         Ok(res)
     }
+
+    // Adapted from https://docs.rs/bellperson/latest/src/bellperson/gadgets/lookup.rs.html#32-118
+    // `bits` is in little-endian order
+    fn conditionally_select3<CS>(
+        cs: &mut CS,
+        bits: &[Boolean],
+        coords: &[Self]
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>
+    {
+        assert_eq!(bits.len(), 3);
+        assert_eq!(coords.len(), 8);
+
+        for coord in coords {
+            assert!(coord.value.is_some());
+            assert_eq!(coord.value.clone().unwrap().len(), coords[0].value.clone().unwrap().len());
+        }
+
+        // Calculate the index into `coords`
+        let i = match (
+            bits[0].get_value(),
+            bits[1].get_value(),
+            bits[2].get_value(),
+        ) {
+            (Some(a_value), Some(b_value), Some(c_value)) => {
+                let mut tmp = 0;
+                if a_value {
+                    tmp += 1;
+                }
+                if b_value {
+                    tmp += 2;
+                }
+                if c_value {
+                    tmp += 4;
+                }
+                Some(tmp)
+            }
+            _ => None,
+        };
+
+        // Allocate the result from the lookup
+        let res_value = coords[i.unwrap()].value.clone().unwrap();
+        let res = Self::alloc_from_limbed_int(
+            &mut cs.namespace(|| "conditional select3 result"),
+            res_value.clone(),
+            coords[0].value.clone().unwrap().len(), // all coord's have the same number of limbs
+        )?;
+        let res_num = res_value.limbs
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| AllocatedNum::alloc(cs.namespace(|| format!("sibling {}", i)),|| Ok(s)))
+            .collect::<Result<Vec<AllocatedNum<F>>, SynthesisError>>()?
+        ;
+        assert_eq!(res.limbs.len(), res_num.len());
+
+        let precomp = Boolean::and(cs.namespace(|| "precomp"), &bits[1], &bits[2])?;
+
+        let one = CS::one();
+
+        for i in 0..coords[0].value.clone().unwrap().len() {
+            // Compute the coefficients for the lookup constraints
+            let mut coeffs = [F::zero(); 8];
+            synth::<F, _>(
+                3, 
+                coords.iter().map(|c| c.value.clone().unwrap().limbs[i]), 
+                &mut coeffs
+            );
+
+            cs.enforce(
+                || format!("lookup constraints for limb {}", i),
+                |lc| {
+                    lc + (coeffs[0b001], one)
+                        + &bits[1].lc::<F>(one, coeffs[0b011])
+                        + &bits[2].lc::<F>(one, coeffs[0b101])
+                        + &precomp.lc::<F>(one, coeffs[0b111])
+                },
+                |lc| lc + &bits[0].lc::<F>(one, F::one()),
+                |lc| {
+                    lc + res_num[i].get_variable()
+                        - (coeffs[0b000], one)
+                        - &bits[1].lc::<F>(one, coeffs[0b010])
+                        - &bits[2].lc::<F>(one, coeffs[0b100])
+                        - &precomp.lc::<F>(one, coeffs[0b110])
+                },
+            );
+        }
+
+        Ok(res)
+    }
 }
+
+// Copied from https://docs.rs/bellperson/0.25.0/src/bellperson/gadgets/lookup.rs.html#10
+// Synthesize the constants for each base pattern.
+fn synth<F: PrimeField, I>(window_size: usize, constants: I, assignment: &mut [F])
+where
+    I: IntoIterator<Item = F>,
+{
+    assert_eq!(assignment.len(), 1 << window_size);
+
+    for (i, constant) in constants.into_iter().enumerate() {
+        let mut cur = assignment[i];
+        cur = -cur;
+        cur.add_assign(constant);
+        assignment[i] = cur;
+        for (j, eval) in assignment.iter_mut().enumerate().skip(i + 1) {
+            if j & i == i {
+                eval.add_assign(&cur);
+            }
+        }
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub struct AllocatedAffinePoint<F: PrimeField + PrimeFieldBits> {
@@ -1093,6 +1206,55 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
             (true,  true)  => a3.value,
         };
         
+        Ok(Self { x, y, value })
+    }
+
+    fn conditionally_select3<CS>(
+        cs: &mut CS,
+        bits: &[Boolean], // bits is in little endian
+        coords: &[Self]
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>
+    {
+        assert_eq!(bits.len(), 3);
+        assert_eq!(coords.len(), 8);
+
+        let x_coords = coords
+            .iter()
+            .map(|c| c.x.clone())
+            .collect::<Vec<AllocatedLimbedInt<F>>>()
+        ;
+        let y_coords = coords
+            .iter()
+            .map(|c| c.y.clone())
+            .collect::<Vec<AllocatedLimbedInt<F>>>()
+        ;
+
+        let x = AllocatedLimbedInt::conditionally_select3(
+            &mut cs.namespace(|| "allocate value of output x coordinate"), 
+            bits, 
+            &x_coords)
+        ?;
+
+        let y = AllocatedLimbedInt::conditionally_select3(
+            &mut cs.namespace(|| "allocate value of output y coordinate"), 
+            bits, 
+            &y_coords)
+        ?;
+
+        let bits_value: Vec<bool> = bits.iter().map(|b| b.get_value().unwrap()).collect();
+
+        let value = match <Vec<bool> as TryInto<[bool;3]>>::try_into(bits_value).unwrap() {
+            [false, false, false] => coords[0].value.clone(),
+            [true, false, false] => coords[1].value.clone(),
+            [false, true, false] => coords[2].value.clone(),
+            [true, true, false] => coords[3].value.clone(),
+            [false, false, true] => coords[4].value.clone(),
+            [true, false, true] => coords[5].value.clone(),
+            [false, true, true] => coords[6].value.clone(),
+            [true, true, true] => coords[7].value.clone()
+        };
         Ok(Self { x, y, value })
     }
 
@@ -1371,6 +1533,150 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         Ok(output)
     }
 
+    pub fn ed25519_scalar_multiplication_3bit<CS>(
+        self,
+        cs: &mut CS,
+        scalar: Vec<Boolean>,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>,
+    {
+        let scalar_len = scalar.len();
+        assert!(scalar_len < 254usize); // the largest curve25519 scalar fits in 253 bits
+        let identity: AffinePoint = AffinePoint::default();
+        
+        // No range checks on limbs required as value is known to be (0,1)
+        let identity_point = Self::alloc_affine_point(
+            &mut cs.namespace(|| "allocate identity point"),
+            identity,
+        )?;
+        // Remember to avoid field membership checks before calling this function
+        self.x.check_base_field_membership(
+            &mut cs.namespace(|| "check x coordinate of base point is in base field")
+        )?;
+        self.y.check_base_field_membership(
+            &mut cs.namespace(|| "check y coordinate of base point is in base field")
+        )?;
+
+
+        let twobase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate double the base"),
+            &self,
+        )?;
+        let threebase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate three times the base"),
+            &twobase,
+            &self,
+        )?;
+        let fourbase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate four times the base"),
+            &twobase,
+        )?;
+        let fivebase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate five times the base"),
+            &threebase,
+            &twobase,
+        )?;
+        let sixbase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate six times the base"),
+            &threebase,
+        )?;
+        let sevenbase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate seven times the base"),
+            &sixbase,
+            &self,
+        )?;
+        let n = scalar_len - 1;
+        assert!(n > 1);
+
+        let mut output = Self::conditionally_select3(
+            &mut cs.namespace(|| "allocate initial value of output"), 
+            &[scalar[n-2].clone(), scalar[n-1].clone(), scalar[n].clone()], 
+            &[identity_point.clone(), self.clone(), twobase.clone(), threebase.clone(), 
+            fourbase.clone(), fivebase.clone(), sixbase.clone(), sevenbase.clone()]
+        )?;
+
+            
+        let mut i: i32 = (n-3) as i32;
+        while i > 0 {
+
+            if i == 1 {
+                output = Self::ed25519_point_doubling(
+                    &mut cs.namespace(|| format!("first doubling in iteration {i}")),
+                    &output,
+                )?;
+                output = Self::ed25519_point_doubling(
+                    &mut cs.namespace(|| format!("second doubling in iteration {i}")),
+                    &output,
+                )?;
+                let tmp = Self::conditionally_select2(
+                    &mut cs.namespace(|| format!("allocate tmp value in iteration {i}")),
+                    &identity_point,
+                    &self,
+                    &twobase.clone(),
+                    &threebase.clone(),
+                    &scalar[(i-1) as usize],
+                    &scalar[i as usize]
+                )?;
+                output = Self::ed25519_point_addition(
+                    &mut cs.namespace(|| format!("allocate sum of output and tmp in iteration {i}")),
+                    &output,
+                    &tmp,
+                )?;
+                break;
+            }
+
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| format!("first doubling in iteration {i}")),
+                &output,
+            )?;
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| format!("second doubling in iteration {i}")),
+                &output,
+            )?;
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| format!("third doubling in iteration {i}")),
+                &output,
+            )?;
+
+            let tmp = Self::conditionally_select3(
+                &mut cs.namespace(|| format!("allocate tmp value in iteration {i}")), 
+                &[scalar[(i-2) as usize].clone(), scalar[(i-1) as usize].clone(), scalar[i as usize].clone()], 
+                &[identity_point.clone(), self.clone(), twobase.clone(), threebase.clone(), 
+                fourbase.clone(), fivebase.clone(), sixbase.clone(), sevenbase.clone()]
+            )?;
+
+            output = Self::ed25519_point_addition(
+                &mut cs.namespace(|| format!("allocate sum of output and tmp in iteration {i}")),
+                &output,
+                &tmp,
+            )?;
+                
+            i = i-3;
+        }
+
+        if n % 3 == 0 {
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| "final doubling of output"),
+                &output,
+            )?;
+            let tmp = Self::ed25519_point_addition(
+                &mut cs.namespace(|| "final sum of output and base"),
+                &output,
+                &self,
+            )?;
+            output = Self::conditionally_select(
+                cs,
+                &tmp,
+                &output,
+                &scalar[0],
+            )?;
+            
+        }
+
+        Ok(output)
+    }
+
 }
 
 #[cfg(test)]
@@ -1383,6 +1689,9 @@ mod tests {
     use num_traits::Zero;
     use pasta_curves::Fp;
     use num_bigint::{RandBigInt, BigUint};
+    use rand_xorshift::XorShiftRng;
+    use rand::SeedableRng;
+    use ff::Field;
 
     #[test]
     fn range_check_linear_combination() {
@@ -2125,6 +2434,71 @@ mod tests {
     }
 
     #[test]
+    fn alloc_limbed_conditionally_select3() {
+        let mut cs = TestConstraintSystem::<Fp>::new();
+        let mut rng = rand::thread_rng();
+        let mut coords: Vec<AllocatedLimbedInt<Fp>> = vec![];
+        for i in 0..8 {
+            let a_uint = rng.gen_biguint(256u64);
+            let a_l = LimbedInt::<Fp>::from(&a_uint);
+            let a = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+                &mut cs.namespace(|| format!("alloc a limb {}", i)),
+                a_l,
+                4
+            );
+            assert!(a.is_ok());
+            coords.push(a.unwrap());
+        }
+
+        let conditions = vec![
+            [false, false, false], [false, false, true], [false, true, false], [false, true, true],
+            [true, false, false], [true, false, true], [true, true, false], [true, true, true]
+        ];
+
+        for (x, cond) in conditions.iter().enumerate() {
+            let  bits: Vec<Boolean> = cond.iter().map(|b| Boolean::constant(*b)).collect();
+
+            let res = AllocatedLimbedInt::<Fp>::conditionally_select3(
+                &mut cs.namespace(|| format!("conditionally select3 result for condition {}", x)),
+                &bits,
+                &coords
+            );    
+            assert!(res.is_ok());
+            let res = res.unwrap();
+    
+            let one = TestConstraintSystem::<Fp>::one();
+            let res_expected = match cond {
+                [false, false, false] => coords[0].clone(),
+                [true, false, false] => coords[1].clone(),
+                [false, true, false] => coords[2].clone(),
+                [true, true, false] => coords[3].clone(),
+                [false, false, true] => coords[4].clone(),
+                [true, false, true] => coords[5].clone(),
+                [false, true, true] => coords[6].clone(),
+                [true, true, true] => coords[7].clone()
+            };
+    
+            for i in 0..res.limbs.len() {
+                cs.enforce(|| format!("res limb {} equality for condition {}", i, x),
+                    |lc| lc + &res.limbs[i],
+                    |lc| lc + one,
+                    |lc| lc + &res_expected.limbs[i],
+                );
+            }
+    
+            assert!(cs.is_satisfied());
+        }
+        
+
+        // Note that the number of constraints for one invocation of conditionally_select3 will be
+        // one-eighth of the number printed by the below statement minus 4 (the constraints in the test)
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+
+    }
+
+    #[test]
     fn alloc_affine_point_addition_verification() {
         let b = Ed25519Curve::basepoint();
         let mut rng = rand::thread_rng();
@@ -2250,5 +2624,78 @@ mod tests {
         println!("Num constraints = {:?}", cs.num_constraints());
         println!("Num inputs = {:?}", cs.num_inputs());
 
+    }
+
+    #[test]
+    fn alloc_affine_scalar_multiplication_window3() {
+        let b = Ed25519Curve::basepoint();
+        let mut rng = rand::thread_rng();
+       
+        let mut scalar = U256::random(&mut rng);
+        scalar = scalar >> 3; // scalar now has 253 significant bits
+        let p = Ed25519Curve::scalar_multiplication(&b, &scalar);
+       
+        let mut scalar_vec: Vec<Boolean> = vec![];
+        for _i in 0..253 {
+            if bool::from(scalar.is_odd()) {
+                scalar_vec.push(Boolean::constant(true))
+            } else {
+                scalar_vec.push(Boolean::constant(false))
+            };
+            scalar = scalar >> 1;
+        }
+
+        let mut cs = TestConstraintSystem::<Fp>::new();
+
+        let b_alloc = AllocatedAffinePoint::alloc_affine_point(
+            &mut cs.namespace(|| "allocate base point"),
+            b,
+        );
+        assert!(b_alloc.is_ok());
+        let b_al = b_alloc.unwrap();
+
+        let p_alloc = b_al.ed25519_scalar_multiplication_3bit(
+            &mut cs.namespace(|| "scalar multiplication"),
+            scalar_vec,
+        );
+        assert!(p_alloc.is_ok());
+        let p_al = p_alloc.unwrap();
+
+        assert_eq!(p, p_al.value);
+
+        assert!(cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+    }
+    
+    // Copied from https://docs.rs/bellperson/0.25.0/src/bellperson/gadgets/lookup.rs.html#292
+    #[test]
+    fn test_synth() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let window_size = 4;
+
+        let mut assignment = vec![Fp::zero(); 1 << window_size];
+        let constants: Vec<_> = (0..(1 << window_size))
+            .map(|_| Fp::random(&mut rng))
+            .collect();
+
+        synth::<Fp, _>(window_size, constants.clone(), &mut assignment);
+
+        for b in 0..(1 << window_size) {
+            let mut acc = Fp::zero();
+
+            for j in 0..(1 << window_size) {
+                if j & b == j {
+                    acc += &assignment[j];
+                }
+            }
+
+            assert_eq!(acc, constants[b]);
+        }
     }
 }
