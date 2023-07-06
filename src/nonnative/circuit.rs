@@ -1319,7 +1319,7 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
             &scalar[n]
         )?;
             
-        let mut i = n-2;
+        let mut i: i32 = (n-2) as i32;
         while i > 0 {
             output = Self::ed25519_point_doubling(
                 &mut cs.namespace(|| format!("first doubling in iteration {i}")),
@@ -1336,8 +1336,8 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
                 &self,
                 &a,
                 &b,
-                &scalar[i-1],
-                &scalar[i]
+                &scalar[(i-1) as usize],
+                &scalar[i as usize]
             )?;
 
             output = Self::ed25519_point_addition(
