@@ -53,12 +53,33 @@ impl AffinePoint {
     pub fn double(&self) -> Self {
         Ed25519Curve::add_points(&self, &self)
     }
+
+    pub fn get_x(&self) -> Fe25519 {
+        self.x
+    } 
+
+    pub fn get_y(&self) -> Fe25519 {
+        self.y
+    } 
+    
+    pub fn coord_to_point(x: Fe25519, y: Fe25519) -> AffinePoint {
+        let point = AffinePoint {
+            x: x,
+            y: y
+        };
+        assert!(point.is_on_curve());
+        point
+    }
 }
 
 impl Default for AffinePoint {
     fn default() -> Self {
         Self { x: Fe25519::zero(), y: Fe25519::one() }
     }
+}
+
+pub fn get_D() -> Fe25519 {
+    D
 }
 
 pub struct Ed25519Curve;
