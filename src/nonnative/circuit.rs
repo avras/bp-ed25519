@@ -745,11 +745,11 @@ where
         let one = BigUint::from(1u64);
         let q_uint: BigUint = (one.clone() << 255) - BigUint::from(19u64);
         let q_l = LimbedInt::<F>::from(&q_uint);
-        let mut q70_l = LimbedInt::<F>::default();
+        let mut q71_l = LimbedInt::<F>::default();
         let two = F::from(2u64);
-        let two_power_70 = two.pow_vartime(&[70u64]);
+        let two_power_71 = two.pow_vartime(&[71u64]);
         for i in 0..q_l.len() {
-            q70_l.limbs[i] = q_l.limbs[i] * two_power_70;
+            q71_l.limbs[i] = q_l.limbs[i] * two_power_71;
         }
 
         let x1y2 = x1.alloc_product(
@@ -769,7 +769,7 @@ where
         let x3v_folded = x3v.fold_quadratic_limbs()?;
 
         let mut g_al = x1y2_folded + &x2y1_folded - &x3v_folded - x3;
-        g_al = g_al.add_limbed_int::<CS>(&q70_l)?;
+        g_al = g_al.add_limbed_int::<CS>(&q71_l)?;
         
         let g_uint = BigUint::from(&g_al.clone().value.unwrap());
         assert!(g_uint.clone().rem(q_uint.clone()).is_zero());
@@ -811,11 +811,11 @@ where
         let one = BigUint::from(1u64);
         let q_uint: BigUint = (one.clone() << 255) - BigUint::from(19u64);
         let q_l = LimbedInt::<F>::from(&q_uint);
-        let mut q70_l = LimbedInt::<F>::default();
+        let mut q71_l = LimbedInt::<F>::default();
         let two = F::from(2u64);
-        let two_power_70 = two.pow_vartime(&[70u64]);
+        let two_power_71 = two.pow_vartime(&[71u64]);
         for i in 0..q_l.len() {
-            q70_l.limbs[i] = q_l.limbs[i] * two_power_70;
+            q71_l.limbs[i] = q_l.limbs[i] * two_power_71;
         }
 
         let x1x2 = x1.alloc_product(
@@ -835,7 +835,7 @@ where
         let y3v_folded = y3v.fold_quadratic_limbs()?;
 
         let mut g_al = x1x2_folded + &y1y2_folded + &y3v_folded - y3;
-        g_al = g_al.add_limbed_int::<CS>(&q70_l)?;
+        g_al = g_al.add_limbed_int::<CS>(&q71_l)?;
         
         let g_uint = BigUint::from(&g_al.clone().value.unwrap());
         assert!(g_uint.clone().rem(q_uint.clone()).is_zero());
