@@ -262,6 +262,12 @@ impl PrimeFieldBits for Fe25519 {
         MODULUS.to_le_bytes().into()
     }
 }
+
+impl Fe25519 {
+    pub fn get_value(&self) -> U256 {
+        self.0
+    }
+}
   
 
 #[cfg(test)]
