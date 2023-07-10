@@ -1,2 +1,2 @@
-mod vanilla;
-mod circuit;
+pub mod vanilla;
+pub mod circuit;
