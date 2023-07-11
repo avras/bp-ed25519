@@ -1111,6 +1111,11 @@ pub struct AllocatedAffinePoint<F: PrimeField + PrimeFieldBits> {
 }
 
 impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
+    
+    pub fn get_point(&self) -> AffinePoint {
+        self.value
+    }
+
     pub fn alloc_affine_point<CS>(
         cs: &mut CS,
         value: AffinePoint,
