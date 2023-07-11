@@ -45,9 +45,9 @@ where
                 || format!("bit {i}"),
                 || {
                     let r = if value_bits[i] {
-                        F::one()
+                        F::ONE
                     } else {
-                        F::zero()
+                        F::ZERO
                     };
                     Ok(r)
                 },
@@ -68,7 +68,7 @@ where
     cs.enforce(
         || format!("last bit of variable is a bit"),
         |mut lc| {
-            let mut f = F::one();
+            let mut f = F::ONE;
             lc = lc + lc_input;
             for v in bits.iter() {
                 f = f.double();
@@ -78,7 +78,7 @@ where
         },
         |mut lc| {
             lc = lc + CS::one();
-            let mut f = F::one();
+            let mut f = F::ONE;
             lc = lc - lc_input;
             for v in bits.iter() {
                 f = f.double();
@@ -251,7 +251,7 @@ where
         let mut sum_values = LimbedInt::<F>::default();
         for i in 0..sum_len {
             let mut tmp = LinearCombination::<F>::zero();
-            let mut tmp_val = F::zero();
+            let mut tmp_val = F::ZERO;
             if i < self_value.len() {
                 tmp = self_lc_vec[i].clone();
                 tmp_val = self_value.limbs[i];
@@ -351,7 +351,7 @@ where
             // Add 18 to the least significant limb. It may or may not overflow the 64 bits
             limbed_int.limbs[0] + c
         } else {
-            F::zero()
+            F::ZERO
         };
         
         let ls_limb_modified = cs.alloc(
@@ -409,13 +409,13 @@ where
             value: Some(prod),
         };
 
-        let mut x = F::zero();
+        let mut x = F::ZERO;
         for _ in 0..product.limbs.len() {
-            x += F::one();
+            x += F::ONE;
             cs.enforce(
                 || format!("pointwise product @ {x:?}"),
                 |lc| {
-                    let mut i = F::one();
+                    let mut i = F::ONE;
                     self.limbs.iter().fold(lc, |lc, c| {
                         let r = lc + (i, c);
                         i *= x;
@@ -423,7 +423,7 @@ where
                     })
                 },
                 |lc| {
-                    let mut i = F::one();
+                    let mut i = F::ONE;
                     other.limbs.iter().fold(lc, |lc, c| {
                         let r = lc + (i, c);
                         i *= x;
@@ -431,7 +431,7 @@ where
                     })
                 },
                 |lc| {
-                    let mut i = F::one();
+                    let mut i = F::ONE;
                     product.limbs.iter().fold(lc, |lc, c| {
                         let r = lc + (i, c);
                         i *= x;
@@ -576,7 +576,7 @@ where
         assert_eq!(carry_ub_bitwidth.len(), diff_len-1);
         assert_eq!(carry_lb_bitwidth.len(), diff_len-1);
 
-        let mut carries: Vec<F> = vec![F::zero(); diff_len-1];
+        let mut carries: Vec<F> = vec![F::ZERO; diff_len-1];
         let mut carry_variables: Vec<Variable> = vec![];
         let exp = BigUint::from(base_bitwidth as u64);
         let base = F::from(2u64).pow_vartime(exp.to_u64_digits());
@@ -588,7 +588,7 @@ where
 
             if i == 0 {
                 let limb_bits = diff_value.limbs[0].to_le_bits();
-                let mut coeff = F::one();
+                let mut coeff = F::ONE;
                 // Calculating carries[0] as diff_value.limbs[0] shifted to the right 64 times (discard the 64 LSBs)
                 for (j, bit) in limb_bits.into_iter().enumerate() {
                     if  j >= 64 {
@@ -623,7 +623,7 @@ where
             }
             else {
                 let limb_bits = (carries[i-1] + diff_value.limbs[i]).to_le_bits();
-                let mut coeff = F::one();
+                let mut coeff = F::ONE;
                 // Calculating carries[i] as diff_value.limbs[i] + carries[i-1] shifted to the right 64 times (discard the 64 LSBs)
                 for (j, bit) in limb_bits.into_iter().enumerate() {
                     if  j >= 64 {
@@ -657,7 +657,7 @@ where
                 );
             }
         }
-        assert_eq!(diff_value.limbs[diff_len-1] + carries[diff_len-2], F::zero());
+        assert_eq!(diff_value.limbs[diff_len-1] + carries[diff_len-2], F::ZERO);
         Ok(cs.enforce(
             || format!("Enforce final zero"),
             |lc| lc + &diff.limbs[diff_len-1] + carry_variables[diff_len-2],
@@ -896,7 +896,7 @@ where
             cs.enforce(
                 || format!("conditional select constraint on limb {i}"),
                 |lc| lc + &a.limbs[i] - &b.limbs[i],
-                |_| condition.lc(CS::one(), F::one()),
+                |_| condition.lc(CS::one(), F::ONE),
                 |lc| lc + &res.limbs[i] - &b.limbs[i],
             );
         }
@@ -970,19 +970,19 @@ where
             cs.enforce(
                 || format!("conditional select2 constraint 1 on limb {i}"),
                 |lc| lc + &a3.limbs[i] - &a2.limbs[i] - &a1.limbs[i] + &a0.limbs[i],
-                |_| condition1.lc(CS::one(), F::one()),
+                |_| condition1.lc(CS::one(), F::ONE),
                 |lc| lc + &tmp1.limbs[i] - &a1.limbs[i] + &a0.limbs[i],
             );
             cs.enforce(
                 || format!("conditional select2 constraint 2 on limb {i}"),
                 |lc| lc + &tmp1.limbs[i],
-                |_| condition0.lc(CS::one(), F::one()),
+                |_| condition0.lc(CS::one(), F::ONE),
                 |lc| lc + &tmp2.limbs[i],
             );
             cs.enforce(
                 || format!("conditional select2 constraint 3 on limb {i}"),
                 |lc| lc + &a2.limbs[i] - &a0.limbs[i],
-                |_| condition1.lc(CS::one(), F::one()),
+                |_| condition1.lc(CS::one(), F::ONE),
                 |lc| lc + &res.limbs[i] - &tmp2.limbs[i] - &a0.limbs[i],
             );
         }
@@ -1051,7 +1051,7 @@ where
 
         for i in 0..coords[0].value.clone().unwrap().len() {
             // Compute the coefficients for the lookup constraints
-            let mut coeffs = [F::zero(); 8];
+            let mut coeffs = [F::ZERO; 8];
             synth::<F, _>(
                 3, 
                 coords.iter().map(|c| c.value.clone().unwrap().limbs[i]), 
@@ -1066,7 +1066,7 @@ where
                         + &bits[2].lc::<F>(one, coeffs[0b101])
                         + &precomp.lc::<F>(one, coeffs[0b111])
                 },
-                |lc| lc + &bits[0].lc::<F>(one, F::one()),
+                |lc| lc + &bits[0].lc::<F>(one, F::ONE),
                 |lc| {
                     lc + res_num[i].get_variable()
                         - (coeffs[0b000], one)

@@ -47,7 +47,7 @@ impl AffinePoint {
     }
 
     pub fn is_zero(&self) -> bool {
-        self.x == Fe25519::zero() && self.y == Fe25519::one()
+        self.x == Fe25519::ZERO && self.y == Fe25519::ONE
     }
 
     pub fn double(&self) -> Self {
@@ -74,11 +74,11 @@ impl AffinePoint {
 
 impl Default for AffinePoint {
     fn default() -> Self {
-        Self { x: Fe25519::zero(), y: Fe25519::one() }
+        Self { x: Fe25519::ZERO, y: Fe25519::ONE }
     }
 }
 
-pub fn get_D() -> Fe25519 {
+pub fn get_d() -> Fe25519 {
     D
 }
 
@@ -87,7 +87,7 @@ pub struct Ed25519Curve;
 impl Ed25519Curve {
     pub fn recover_even_x_from_y(y: Fe25519) -> Fe25519 {
         let y_sq = y.square();
-        let x_sq = (y_sq - Fe25519::one()) * (D*y_sq + Fe25519::one()).invert().unwrap();
+        let x_sq = (y_sq - Fe25519::ONE) * (D*y_sq + Fe25519::ONE).invert().unwrap();
 
         let x = x_sq.sqrt();
         assert!(bool::from(x.is_some())); // y must correspond to a curve point
@@ -111,8 +111,8 @@ impl Ed25519Curve {
         let y = point.y;
         let x_sq = x.square();
         let y_sq = y.square();
-        let tmp = -x_sq + y_sq - Fe25519::one() - D*x_sq*y_sq;
-        tmp == Fe25519::zero()
+        let tmp = -x_sq + y_sq - Fe25519::ONE - D*x_sq*y_sq;
+        tmp == Fe25519::ZERO
     }
 
     pub fn add_points(p: &AffinePoint, q: &AffinePoint) -> AffinePoint {
@@ -122,8 +122,8 @@ impl Ed25519Curve {
         let y2 = q.y;
         let dx1x2y1y2 = D*x1*x2*y1*y2;
         AffinePoint {
-            x: (x1*y2 + x2*y1)*(Fe25519::one() + dx1x2y1y2).invert().unwrap(),
-            y: (x1*x2 + y1*y2)*(Fe25519::one() - dx1x2y1y2).invert().unwrap(),
+            x: (x1*y2 + x2*y1)*(Fe25519::ONE + dx1x2y1y2).invert().unwrap(),
+            y: (x1*x2 + y1*y2)*(Fe25519::ONE - dx1x2y1y2).invert().unwrap(),
         }
     }
 
@@ -154,7 +154,7 @@ mod tests {
         loop {
             let y = Fe25519::random(&mut rng);
             let y_sq = y.square();
-            let x_sq = (y_sq - Fe25519::one()) * (D*y_sq + Fe25519::one()).invert().unwrap();
+            let x_sq = (y_sq - Fe25519::ONE) * (D*y_sq + Fe25519::ONE).invert().unwrap();
 
             let x = x_sq.sqrt();
             if bool::from(x.is_some()) {

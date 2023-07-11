@@ -18,7 +18,7 @@ where
     F: PrimeField + PrimeFieldBits
 {
     fn default() -> Self {
-        Self { limbs: vec![F::zero(); NUM_LIMBS] }
+        Self { limbs: vec![F::ZERO; NUM_LIMBS] }
     }
 }
 
@@ -73,7 +73,7 @@ where
 
     fn add(self, rhs: LimbedInt<F>) -> Self::Output {
         let sum_len = self.len().max(rhs.len());
-        let mut sum = Self { limbs: vec![F::zero(); sum_len]};
+        let mut sum = Self { limbs: vec![F::ZERO; sum_len]};
         for i in 0..sum_len {
             if i < self.len() {
                 sum.limbs[i] += self.limbs[i];
@@ -94,7 +94,7 @@ where
 
     fn sub(self, rhs: LimbedInt<F>) -> Self::Output {
         let diff_len = self.len().max(rhs.len());
-        let mut diff = Self { limbs: vec![F::zero(); diff_len]};
+        let mut diff = Self { limbs: vec![F::ZERO; diff_len]};
         for i in 0..diff_len {
             if i < self.len() {
                 diff.limbs[i] += self.limbs[i];
@@ -122,7 +122,7 @@ where
     pub(crate) fn pad_limbs(&mut self, padded_length: usize) {
         assert!(self.len() <= padded_length);
         for _ in self.len()..padded_length {
-            self.limbs.push(F::zero());
+            self.limbs.push(F::ZERO);
         }
     } 
 
@@ -132,7 +132,7 @@ where
         let num_limbs = a.len();
         let num_limbs_in_cubic = 3*(num_limbs-1)+1;
 
-        let mut prod: LimbedInt<F> = Self { limbs: vec![F::zero(); num_limbs_in_cubic] };
+        let mut prod: LimbedInt<F> = Self { limbs: vec![F::ZERO; num_limbs_in_cubic] };
         for i in 0..num_limbs {
             for j in 0..num_limbs {
                 for k in 0..num_limbs {
@@ -160,7 +160,7 @@ where
     pub(crate) fn calc_quadratic_limbs(a: &LimbedInt<F>, b: &LimbedInt<F>) -> Self {
         let num_limbs_in_quadratic = a.len() + b.len() - 1;
 
-        let mut prod: LimbedInt<F> = Self { limbs: vec![F::zero(); num_limbs_in_quadratic] };
+        let mut prod: LimbedInt<F> = Self { limbs: vec![F::ZERO; num_limbs_in_quadratic] };
         for i in 0..a.len() {
             for j in 0..b.len() {
                 prod.limbs[i+j] += a.limbs[i] * b.limbs[j];
@@ -184,14 +184,14 @@ where
 
     fn check_difference_is_zero(a: LimbedInt<F>, b: LimbedInt<F>) -> bool {
         let diff = a - b;
-        let mut carries: Vec<F> = vec![F::zero(); diff.len()-1];
+        let mut carries: Vec<F> = vec![F::ZERO; diff.len()-1];
         let exp64 = BigUint::from(NUM_BITS_PER_LIMB as u64);
         let base = F::from(2u64).pow_vartime(exp64.to_u64_digits());
 
         for i in 0..diff.len()-1 {
             if i == 0 {
                 let limb_bits = diff.limbs[0].to_le_bits();
-                let mut coeff = F::one();
+                let mut coeff = F::ONE;
                 // Calculating carries[0] as diff.limbs[0] shifted to the right 64 times (discard the 64 LSBs)
                 for (j, bit) in limb_bits.into_iter().enumerate() {
                     if  j >= 64 {
@@ -205,7 +205,7 @@ where
             }
             else {
                 let limb_bits = (carries[i-1] + diff.limbs[i]).to_le_bits();
-                let mut coeff = F::one();
+                let mut coeff = F::ONE;
                 // Calculating carries[i] as diff.limbs[i] + carries[i-1] shifted to the right 64 times (discard the 64 LSBs)
                 for (j, bit) in limb_bits.into_iter().enumerate() {
                     if  j >= NUM_BITS_PER_LIMB {
@@ -218,7 +218,7 @@ where
                 assert_eq!(diff.limbs[i] + carries[i-1], carries[i]*base);
             }
         }
-        diff.limbs[diff.len()-1] + carries[diff.len()-2] == F::zero()
+        diff.limbs[diff.len()-1] + carries[diff.len()-2] == F::ZERO
     }
 
     pub(crate) fn calc_cubic_product_witness(
@@ -390,8 +390,8 @@ where
 {
     fn default() -> Self {
         Self {
-            x: LimbedInt::<F>::from(&Fe25519::zero()),
-            y: LimbedInt::<F>::from(&Fe25519::one()),
+            x: LimbedInt::<F>::from(&Fe25519::ZERO),
+            y: LimbedInt::<F>::from(&Fe25519::ZERO),
         }
     }
 }
