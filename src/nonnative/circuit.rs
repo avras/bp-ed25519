@@ -1,7 +1,6 @@
 use std::ops::{Add, Sub, Mul, Rem};
 use bellperson::{ConstraintSystem, SynthesisError, LinearCombination, Variable};
 use bellperson::gadgets::boolean::{AllocatedBit, Boolean};
-use bellperson::gadgets::num::AllocatedNum;
 use ff::{PrimeField, PrimeFieldBits};
 use num_bigint::BigUint;
 use num_traits::Zero;
@@ -990,116 +989,32 @@ where
         Ok(res)
     }
 
-    // Adapted from https://docs.rs/bellperson/latest/src/bellperson/gadgets/lookup.rs.html#32-118
-    // `bits` is in little-endian order
-    fn conditionally_select3<CS>(
+    // Adapted from https://docs.rs/bellperson-nonnative/0.4.0/src/bellperson_nonnative/util/gadget.rs.html#104-124
+    fn mux_tree<'a, CS>(
         cs: &mut CS,
-        bits: &[Boolean],
-        coords: &[Self]
+        mut select_bits: impl Iterator<Item = &'a Boolean> + Clone, // The first bit is taken as the highest order
+        inputs: &[Self]
     ) -> Result<Self, SynthesisError>
     where
-        CS: ConstraintSystem<F>
+        CS: ConstraintSystem<F>,
     {
-        assert_eq!(bits.len(), 3);
-        assert_eq!(coords.len(), 8);
-
-        for coord in coords {
-            assert!(coord.value.is_some());
-            assert_eq!(coord.value.clone().unwrap().len(), coords[0].value.clone().unwrap().len());
-        }
-
-        // Calculate the index into `coords`
-        let i = match (
-            bits[0].get_value(),
-            bits[1].get_value(),
-            bits[2].get_value(),
-        ) {
-            (Some(a_value), Some(b_value), Some(c_value)) => {
-                let mut tmp = 0;
-                if a_value {
-                    tmp += 1;
-                }
-                if b_value {
-                    tmp += 2;
-                }
-                if c_value {
-                    tmp += 4;
-                }
-                Some(tmp)
+        if let Some(bit) = select_bits.next() {
+            if inputs.len() & 1 != 0 {
+                return Err(SynthesisError::Unsatisfiable);
             }
-            _ => None,
-        };
-
-        // Allocate the result from the lookup
-        let res_value = coords[i.unwrap()].value.clone().unwrap();
-        let res = Self::alloc_from_limbed_int(
-            &mut cs.namespace(|| "conditional select3 result"),
-            res_value.clone(),
-            coords[0].value.clone().unwrap().len(), // all coord's have the same number of limbs
-        )?;
-        let res_num = res_value.limbs
-            .into_iter()
-            .enumerate()
-            .map(|(i, s)| AllocatedNum::alloc(cs.namespace(|| format!("sibling {}", i)),|| Ok(s)))
-            .collect::<Result<Vec<AllocatedNum<F>>, SynthesisError>>()?
-        ;
-        assert_eq!(res.limbs.len(), res_num.len());
-
-        let precomp = Boolean::and(cs.namespace(|| "precomp"), &bits[1], &bits[2])?;
-
-        let one = CS::one();
-
-        for i in 0..coords[0].value.clone().unwrap().len() {
-            // Compute the coefficients for the lookup constraints
-            let mut coeffs = [F::ZERO; 8];
-            synth::<F, _>(
-                3, 
-                coords.iter().map(|c| c.value.clone().unwrap().limbs[i]), 
-                &mut coeffs
-            );
-
-            cs.enforce(
-                || format!("lookup constraints for limb {}", i),
-                |lc| {
-                    lc + (coeffs[0b001], one)
-                        + &bits[1].lc::<F>(one, coeffs[0b011])
-                        + &bits[2].lc::<F>(one, coeffs[0b101])
-                        + &precomp.lc::<F>(one, coeffs[0b111])
-                },
-                |lc| lc + &bits[0].lc::<F>(one, F::ONE),
-                |lc| {
-                    lc + res_num[i].get_variable()
-                        - (coeffs[0b000], one)
-                        - &bits[1].lc::<F>(one, coeffs[0b010])
-                        - &bits[2].lc::<F>(one, coeffs[0b100])
-                        - &precomp.lc::<F>(one, coeffs[0b110])
-                },
-            );
-        }
-
-        Ok(res)
-    }
-}
-
-// Copied from https://docs.rs/bellperson/0.25.0/src/bellperson/gadgets/lookup.rs.html#10
-// Synthesize the constants for each base pattern.
-fn synth<F: PrimeField, I>(window_size: usize, constants: I, assignment: &mut [F])
-where
-    I: IntoIterator<Item = F>,
-{
-    assert_eq!(assignment.len(), 1 << window_size);
-
-    for (i, constant) in constants.into_iter().enumerate() {
-        let mut cur = assignment[i];
-        cur = -cur;
-        cur.add_assign(constant);
-        assignment[i] = cur;
-        for (j, eval) in assignment.iter_mut().enumerate().skip(i + 1) {
-            if j & i == i {
-                eval.add_assign(&cur);
+            let left_half = &inputs[..(inputs.len() / 2)];
+            let right_half = &inputs[(inputs.len() / 2)..];
+            let left = AllocatedLimbedInt::mux_tree(&mut cs.namespace(|| "left"), select_bits.clone(), left_half)?;
+            let right = AllocatedLimbedInt::mux_tree(&mut cs.namespace(|| "right"), select_bits, right_half)?;
+            AllocatedLimbedInt::conditionally_select(&mut cs.namespace(|| "join"),  &right, &left, bit)
+        } else {
+            if inputs.len() != 1 {
+                return Err(SynthesisError::Unsatisfiable);
             }
+            Ok(inputs[0].clone())
         }
     }
+    
 }
 
 
@@ -1216,7 +1131,7 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
 
     fn conditionally_select3<CS>(
         cs: &mut CS,
-        bits: &[Boolean], // bits is in little endian
+        bits: &[Boolean],
         coords: &[Self]
     ) -> Result<Self, SynthesisError>
     where
@@ -1236,15 +1151,15 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
             .collect::<Vec<AllocatedLimbedInt<F>>>()
         ;
 
-        let x = AllocatedLimbedInt::conditionally_select3(
+        let x = AllocatedLimbedInt::mux_tree(
             &mut cs.namespace(|| "allocate value of output x coordinate"), 
-            bits, 
+            bits.iter(), 
             &x_coords)
         ?;
 
-        let y = AllocatedLimbedInt::conditionally_select3(
+        let y = AllocatedLimbedInt::mux_tree(
             &mut cs.namespace(|| "allocate value of output y coordinate"), 
-            bits, 
+            bits.iter(), 
             &y_coords)
         ?;
 
@@ -1252,12 +1167,12 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
 
         let value = match <Vec<bool> as TryInto<[bool;3]>>::try_into(bits_value).unwrap() {
             [false, false, false] => coords[0].value.clone(),
-            [true, false, false] => coords[1].value.clone(),
+            [false, false, true] => coords[1].value.clone(),
             [false, true, false] => coords[2].value.clone(),
-            [true, true, false] => coords[3].value.clone(),
-            [false, false, true] => coords[4].value.clone(),
+            [false, true, true] => coords[3].value.clone(),
+            [true, false, false] => coords[4].value.clone(),
             [true, false, true] => coords[5].value.clone(),
-            [false, true, true] => coords[6].value.clone(),
+            [true, true, false] => coords[6].value.clone(),
             [true, true, true] => coords[7].value.clone()
         };
         Ok(Self { x, y, value })
@@ -1596,7 +1511,7 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
 
         let mut output = Self::conditionally_select3(
             &mut cs.namespace(|| "allocate initial value of output"), 
-            &[scalar[n-2].clone(), scalar[n-1].clone(), scalar[n].clone()], 
+            &[scalar[n].clone(), scalar[n-1].clone(), scalar[n-2].clone()], 
             &[identity_point.clone(), self.clone(), twobase.clone(), threebase.clone(), 
             fourbase.clone(), fivebase.clone(), sixbase.clone(), sevenbase.clone()]
         )?;
@@ -1646,7 +1561,7 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
 
             let tmp = Self::conditionally_select3(
                 &mut cs.namespace(|| format!("allocate tmp value in iteration {i}")), 
-                &[scalar[(i-2) as usize].clone(), scalar[(i-1) as usize].clone(), scalar[i as usize].clone()], 
+                &[scalar[i as usize].clone(), scalar[(i-1) as usize].clone(), scalar[(i-2) as usize].clone()], 
                 &[identity_point.clone(), self.clone(), twobase.clone(), threebase.clone(), 
                 fourbase.clone(), fivebase.clone(), sixbase.clone(), sevenbase.clone()]
             )?;
@@ -1694,9 +1609,6 @@ mod tests {
     use num_traits::Zero;
     use pasta_curves::Fp;
     use num_bigint::{RandBigInt, BigUint};
-    use rand_xorshift::XorShiftRng;
-    use rand::SeedableRng;
-    use ff::Field;
 
     #[test]
     fn range_check_linear_combination() {
@@ -2439,7 +2351,7 @@ mod tests {
     }
 
     #[test]
-    fn alloc_limbed_conditionally_select3() {
+    fn alloc_limbed_conditionally_select_mux3() {
         let mut cs = TestConstraintSystem::<Fp>::new();
         let mut rng = rand::thread_rng();
         let mut coords: Vec<AllocatedLimbedInt<Fp>> = vec![];
@@ -2462,10 +2374,11 @@ mod tests {
 
         for (x, cond) in conditions.iter().enumerate() {
             let  bits: Vec<Boolean> = cond.iter().map(|b| Boolean::constant(*b)).collect();
+            let bits_iter = bits.iter();
 
-            let res = AllocatedLimbedInt::<Fp>::conditionally_select3(
-                &mut cs.namespace(|| format!("conditionally select3 result for condition {}", x)),
-                &bits,
+            let res = AllocatedLimbedInt::<Fp>::mux_tree(
+                &mut cs.namespace(|| format!("conditionally select3 mux result for condition {}", x)),
+                bits_iter,
                 &coords
             );    
             assert!(res.is_ok());
@@ -2474,12 +2387,12 @@ mod tests {
             let one = TestConstraintSystem::<Fp>::one();
             let res_expected = match cond {
                 [false, false, false] => coords[0].clone(),
-                [true, false, false] => coords[1].clone(),
+                [false, false, true] => coords[1].clone(),
                 [false, true, false] => coords[2].clone(),
-                [true, true, false] => coords[3].clone(),
-                [false, false, true] => coords[4].clone(),
+                [false, true, true] => coords[3].clone(),
+                [true, false, false] => coords[4].clone(),
                 [true, false, true] => coords[5].clone(),
-                [false, true, true] => coords[6].clone(),
+                [true, true, false] => coords[6].clone(),
                 [true, true, true] => coords[7].clone()
             };
     
@@ -2499,8 +2412,6 @@ mod tests {
         // one-eighth of the number printed by the below statement minus 4 (the constraints in the test)
         println!("Num constraints = {:?}", cs.num_constraints());
         println!("Num inputs = {:?}", cs.num_inputs());
-
-
     }
 
     #[test]
@@ -2672,35 +2583,5 @@ mod tests {
         println!("Num constraints = {:?}", cs.num_constraints());
         println!("Num inputs = {:?}", cs.num_inputs());
 
-    }
-    
-    // Copied from https://docs.rs/bellperson/0.25.0/src/bellperson/gadgets/lookup.rs.html#292
-    #[test]
-    fn test_synth() {
-        let mut rng = XorShiftRng::from_seed([
-            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
-            0xbc, 0xe5,
-        ]);
-
-        let window_size = 4;
-
-        let mut assignment = vec![Fp::zero(); 1 << window_size];
-        let constants: Vec<_> = (0..(1 << window_size))
-            .map(|_| Fp::random(&mut rng))
-            .collect();
-
-        synth::<Fp, _>(window_size, constants.clone(), &mut assignment);
-
-        for b in 0..(1 << window_size) {
-            let mut acc = Fp::zero();
-
-            for j in 0..(1 << window_size) {
-                if j & b == j {
-                    acc += &assignment[j];
-                }
-            }
-
-            assert_eq!(acc, constants[b]);
-        }
     }
 }
