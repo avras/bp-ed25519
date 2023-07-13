@@ -1178,6 +1178,63 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         Ok(Self { x, y, value })
     }
 
+    fn conditionally_select4<CS>(
+        cs: &mut CS,
+        bits: &[Boolean],
+        coords: &[Self]
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>
+    {
+        assert_eq!(bits.len(), 4);
+        assert_eq!(coords.len(), 16);
+
+        let x_coords = coords
+            .iter()
+            .map(|c| c.x.clone())
+            .collect::<Vec<AllocatedLimbedInt<F>>>()
+        ;
+        let y_coords = coords
+            .iter()
+            .map(|c| c.y.clone())
+            .collect::<Vec<AllocatedLimbedInt<F>>>()
+        ;
+
+        let x = AllocatedLimbedInt::mux_tree(
+            &mut cs.namespace(|| "allocate value of output x coordinate"), 
+            bits.iter(), 
+            &x_coords)
+        ?;
+
+        let y = AllocatedLimbedInt::mux_tree(
+            &mut cs.namespace(|| "allocate value of output y coordinate"), 
+            bits.iter(), 
+            &y_coords)
+        ?;
+
+        let bits_value: Vec<bool> = bits.iter().map(|b| b.get_value().unwrap()).collect();
+
+        let value = match <Vec<bool> as TryInto<[bool;4]>>::try_into(bits_value).unwrap() {
+            [false, false, false, false] => coords[0].value.clone(),
+            [false, false, false, true] => coords[1].value.clone(),
+            [false, false, true, false] => coords[2].value.clone(),
+            [false, false, true, true] => coords[3].value.clone(),
+            [false, true, false, false] => coords[4].value.clone(),
+            [false, true, false, true] => coords[5].value.clone(),
+            [false, true, true, false] => coords[6].value.clone(),
+            [false, true, true, true] => coords[7].value.clone(),
+            [true, false, false, false] => coords[8].value.clone(),
+            [true, false, false, true] => coords[9].value.clone(),
+            [true, false, true, false] => coords[10].value.clone(),
+            [true, false, true, true] => coords[11].value.clone(),
+            [true, true, false, false] => coords[12].value.clone(),
+            [true, true, false, true] => coords[13].value.clone(),
+            [true, true, true, false] => coords[14].value.clone(),
+            [true, true, true, true] => coords[15].value.clone()
+        };
+        Ok(Self { x, y, value })
+    }
+
     fn verify_ed25519_point_addition<CS>(
         cs: &mut CS,
         p: &Self,
@@ -1507,7 +1564,7 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
             &self,
         )?;
         let n = scalar_len - 1;
-        assert!(n > 1);
+        assert!(n > 2);
 
         let mut output = Self::conditionally_select3(
             &mut cs.namespace(|| "allocate initial value of output"), 
@@ -1576,6 +1633,229 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         }
 
         if n % 3 == 0 {
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| "final doubling of output"),
+                &output,
+            )?;
+            let tmp = Self::ed25519_point_addition(
+                &mut cs.namespace(|| "final sum of output and base"),
+                &output,
+                &self,
+            )?;
+            output = Self::conditionally_select(
+                cs,
+                &tmp,
+                &output,
+                &scalar[0],
+            )?;
+            
+        }
+
+        Ok(output)
+    }
+
+    pub fn ed25519_scalar_multiplication_4bit<CS>(
+        self,
+        cs: &mut CS,
+        scalar: Vec<Boolean>,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<F>,
+    {
+        let scalar_len = scalar.len();
+        assert!(scalar_len < 254usize); // the largest curve25519 scalar fits in 253 bits
+        let identity: AffinePoint = AffinePoint::default();
+        
+        // No range checks on limbs required as value is known to be (0,1)
+        let identity_point = Self::alloc_affine_point(
+            &mut cs.namespace(|| "allocate identity point"),
+            identity,
+        )?;
+        // Remember to avoid field membership checks before calling this function
+        self.x.check_base_field_membership(
+            &mut cs.namespace(|| "check x coordinate of base point is in base field")
+        )?;
+        self.y.check_base_field_membership(
+            &mut cs.namespace(|| "check y coordinate of base point is in base field")
+        )?;
+
+
+        let twobase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate double the base"),
+            &self,
+        )?;
+        let threebase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate three times the base"),
+            &twobase,
+            &self,
+        )?;
+        let fourbase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate four times the base"),
+            &twobase,
+        )?;
+        let fivebase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate five times the base"),
+            &threebase,
+            &twobase,
+        )?;
+        let sixbase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate six times the base"),
+            &threebase,
+        )?;
+        let sevenbase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate seven times the base"),
+            &sixbase,
+            &self,
+        )?;
+
+        let eightbase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate eight times the base"),
+            &fourbase,
+        )?;
+        let ninebase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate nine times the base"),
+            &eightbase,
+            &self,
+        )?;
+        let tenbase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate ten times the base"),
+            &fivebase,
+        )?;
+        let elevenbase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate eleven times the base"),
+            &tenbase,
+            &self,
+        )?;
+        let twelvebase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate twelve times the base"),
+            &sixbase,
+        )?;
+        let thirteenbase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate thirteen times the base"),
+            &twelvebase,
+            &self,
+        )?;
+        let fourteenbase = Self::ed25519_point_doubling(
+            &mut cs.namespace(|| "allocate fourteen times the base"),
+            &sevenbase,
+        )?;
+        let fifteenbase = Self::ed25519_point_addition(
+            &mut cs.namespace(|| "allocate fifteen times the base"),
+            &fourteenbase,
+            &self,
+        )?;
+        
+        let n = scalar_len - 1;
+        assert!(n > 3);
+
+        let mut output = Self::conditionally_select4(
+            &mut cs.namespace(|| "allocate initial value of output"), 
+            &[scalar[n].clone(), scalar[n-1].clone(), scalar[n-2].clone(), scalar[n-3].clone()], 
+            &[
+                identity_point.clone(), self.clone(), twobase.clone(), threebase.clone(), 
+                fourbase.clone(), fivebase.clone(), sixbase.clone(), sevenbase.clone(),
+                eightbase.clone(), ninebase.clone(), tenbase.clone(), elevenbase.clone(), 
+                twelvebase.clone(), thirteenbase.clone(), fourteenbase.clone(), fifteenbase.clone()
+            ]
+        )?;
+
+            
+        let mut i: i32 = (n-4) as i32;
+        while i > 0 {
+
+            if i == 1 {
+                output = Self::ed25519_point_doubling(
+                    &mut cs.namespace(|| format!("first doubling in iteration {i}")),
+                    &output,
+                )?;
+                output = Self::ed25519_point_doubling(
+                    &mut cs.namespace(|| format!("second doubling in iteration {i}")),
+                    &output,
+                )?;
+                let tmp = Self::conditionally_select2(
+                    &mut cs.namespace(|| format!("allocate tmp value in iteration {i}")),
+                    &identity_point,
+                    &self,
+                    &twobase.clone(),
+                    &threebase.clone(),
+                    &scalar[(i-1) as usize],
+                    &scalar[i as usize]
+                )?;
+                output = Self::ed25519_point_addition(
+                    &mut cs.namespace(|| format!("allocate sum of output and tmp in iteration {i}")),
+                    &output,
+                    &tmp,
+                )?;
+                break;
+            }
+
+            if i == 2 {
+                output = Self::ed25519_point_doubling(
+                    &mut cs.namespace(|| format!("first doubling in iteration {i}")),
+                    &output,
+                )?;
+                output = Self::ed25519_point_doubling(
+                    &mut cs.namespace(|| format!("second doubling in iteration {i}")),
+                    &output,
+                )?;
+                output = Self::ed25519_point_doubling(
+                    &mut cs.namespace(|| format!("third doubling in iteration {i}")),
+                    &output,
+                )?;
+    
+                let tmp = Self::conditionally_select3(
+                    &mut cs.namespace(|| format!("allocate tmp value in iteration {i}")), 
+                    &[scalar[i as usize].clone(), scalar[(i-1) as usize].clone(), scalar[(i-2) as usize].clone()], 
+                    &[identity_point.clone(), self.clone(), twobase.clone(), threebase.clone(), 
+                    fourbase.clone(), fivebase.clone(), sixbase.clone(), sevenbase.clone()]
+                )?;
+    
+                output = Self::ed25519_point_addition(
+                    &mut cs.namespace(|| format!("allocate sum of output and tmp in iteration {i}")),
+                    &output,
+                    &tmp,
+                )?;
+                break;
+            }
+
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| format!("first doubling in iteration {i}")),
+                &output,
+            )?;
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| format!("second doubling in iteration {i}")),
+                &output,
+            )?;
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| format!("third doubling in iteration {i}")),
+                &output,
+            )?;
+            output = Self::ed25519_point_doubling(
+                &mut cs.namespace(|| format!("fourth doubling in iteration {i}")),
+                &output,
+            )?;
+
+            let tmp = Self::conditionally_select4(
+                &mut cs.namespace(|| format!("allocate tmp value in iteration {i}")), 
+                &[scalar[i as usize].clone(), scalar[(i-1) as usize].clone(), scalar[(i-2) as usize].clone(), scalar[(i-3) as usize].clone()], 
+                &[
+                    identity_point.clone(), self.clone(), twobase.clone(), threebase.clone(), 
+                    fourbase.clone(), fivebase.clone(), sixbase.clone(), sevenbase.clone(),
+                    eightbase.clone(), ninebase.clone(), tenbase.clone(), elevenbase.clone(), 
+                    twelvebase.clone(), thirteenbase.clone(), fourteenbase.clone(), fifteenbase.clone()
+                ]
+            )?;
+
+            output = Self::ed25519_point_addition(
+                &mut cs.namespace(|| format!("allocate sum of output and tmp in iteration {i}")),
+                &output,
+                &tmp,
+            )?;
+                
+            i = i-4;
+        }
+
+        if n % 4 == 0 {
             output = Self::ed25519_point_doubling(
                 &mut cs.namespace(|| "final doubling of output"),
                 &output,
@@ -2415,6 +2695,78 @@ mod tests {
     }
 
     #[test]
+    fn alloc_limbed_conditionally_select_mux4() {
+        let mut cs = TestConstraintSystem::<Fp>::new();
+        let mut rng = rand::thread_rng();
+        let mut coords: Vec<AllocatedLimbedInt<Fp>> = vec![];
+        for i in 0..16 {
+            let a_uint = rng.gen_biguint(256u64);
+            let a_l = LimbedInt::<Fp>::from(&a_uint);
+            let a = AllocatedLimbedInt::<Fp>::alloc_from_limbed_int(
+                &mut cs.namespace(|| format!("alloc a limb {}", i)),
+                a_l,
+                4
+            );
+            assert!(a.is_ok());
+            coords.push(a.unwrap());
+        }
+
+        let conditions = vec![
+            [false, false, false, false], [false, false, false, true], [false, false, true, false], [false, false, true, true], [false, true, false, false], [false, true, false, true], [false, true, true, false], [false, true, true, true],
+            [true, false, false, false], [true, false, false, true], [true, false, true, false], [true, false, true, true], [true, true, false, false], [true, true, false, true], [true, true, true, false], [true, true, true, true],
+        ];
+
+        for (x, cond) in conditions.iter().enumerate() {
+            let  bits: Vec<Boolean> = cond.iter().map(|b| Boolean::constant(*b)).collect();
+            let bits_iter = bits.iter();
+
+            let res = AllocatedLimbedInt::<Fp>::mux_tree(
+                &mut cs.namespace(|| format!("conditionally select4 mux result for condition {}", x)),
+                bits_iter,
+                &coords
+            );    
+            assert!(res.is_ok());
+            let res = res.unwrap();
+    
+            let one = TestConstraintSystem::<Fp>::one();
+            let res_expected = match cond {
+                [false, false, false, false] => coords[0].clone(),
+                [false, false, false, true] => coords[1].clone(),
+                [false, false, true, false] => coords[2].clone(),
+                [false, false, true, true] => coords[3].clone(),
+                [false, true, false, false] => coords[4].clone(),
+                [false, true, false, true] => coords[5].clone(),
+                [false, true, true, false] => coords[6].clone(),
+                [false, true, true, true] => coords[7].clone(),
+                [true, false, false, false] => coords[8].clone(),
+                [true, false, false, true] => coords[9].clone(),
+                [true, false, true, false] => coords[10].clone(),
+                [true, false, true, true] => coords[11].clone(),
+                [true, true, false, false] => coords[12].clone(),
+                [true, true, false, true] => coords[13].clone(),
+                [true, true, true, false] => coords[14].clone(),
+                [true, true, true, true] => coords[15].clone()
+            };
+    
+            for i in 0..res.limbs.len() {
+                cs.enforce(|| format!("res limb {} equality for condition {}", i, x),
+                    |lc| lc + &res.limbs[i],
+                    |lc| lc + one,
+                    |lc| lc + &res_expected.limbs[i],
+                );
+            }
+    
+            assert!(cs.is_satisfied());
+        }
+        
+
+        // Note that the number of constraints for one invocation of conditionally_select4 will be
+        // one-sixteenth of the number printed by the below statement minus 4 (the constraints in the test)
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+    }
+
+    #[test]
     fn alloc_affine_point_addition_verification() {
         let b = Ed25519Curve::basepoint();
         let mut rng = rand::thread_rng();
@@ -2571,6 +2923,49 @@ mod tests {
         let b_al = b_alloc.unwrap();
 
         let p_alloc = b_al.ed25519_scalar_multiplication_3bit(
+            &mut cs.namespace(|| "scalar multiplication"),
+            scalar_vec,
+        );
+        assert!(p_alloc.is_ok());
+        let p_al = p_alloc.unwrap();
+
+        assert_eq!(p, p_al.value);
+
+        assert!(cs.is_satisfied());
+        println!("Num constraints = {:?}", cs.num_constraints());
+        println!("Num inputs = {:?}", cs.num_inputs());
+
+    }
+
+    #[test]
+    fn alloc_affine_scalar_multiplication_window4() {
+        let b = Ed25519Curve::basepoint();
+        let mut rng = rand::thread_rng();
+       
+        let mut scalar = U256::random(&mut rng);
+        scalar = scalar >> 3; // scalar now has 253 significant bits
+        let p = Ed25519Curve::scalar_multiplication(&b, &scalar);
+       
+        let mut scalar_vec: Vec<Boolean> = vec![];
+        for _i in 0..253 {
+            if bool::from(scalar.is_odd()) {
+                scalar_vec.push(Boolean::constant(true))
+            } else {
+                scalar_vec.push(Boolean::constant(false))
+            };
+            scalar = scalar >> 1;
+        }
+
+        let mut cs = TestConstraintSystem::<Fp>::new();
+
+        let b_alloc = AllocatedAffinePoint::alloc_affine_point(
+            &mut cs.namespace(|| "allocate base point"),
+            b,
+        );
+        assert!(b_alloc.is_ok());
+        let b_al = b_alloc.unwrap();
+
+        let p_alloc = b_al.ed25519_scalar_multiplication_4bit(
             &mut cs.namespace(|| "scalar multiplication"),
             scalar_vec,
         );
