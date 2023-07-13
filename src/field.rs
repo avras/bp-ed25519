@@ -246,14 +246,6 @@ impl PrimeField for Fe25519 {
     fn is_odd(&self) -> Choice {
         self.0.is_odd()
     }
-
-    // fn multiplicative_generator() -> Self {
-    //     Self(U256::from_u8(2))
-    // }
-
-    // fn root_of_unity() -> Self {
-    //     Self(U256::from_be_hex("2b8324804fc1df0b2b4d00993dfbd7a72f431806ad2fe478c4ee1b274a0ea0b0"))
-    // }
 }
 
 impl PrimeFieldBits for Fe25519 {
@@ -278,14 +270,6 @@ impl Fe25519 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // const TWO_INV: Fe25519 =
-    //     Fe25519(U256::from_be_hex("3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"));
-
-    // const ROOT_OF_UNITY_INV: Fe25519 =
-    //     Fe25519(U256::from_be_hex("547cdb7fb03e20f4d4b2ff66c2042858d0bce7f952d01b873b11e4d8b5f15f3d"));
-
-    // const DELTA: Fe25519 = Fe25519(U256::from_u8(16));
-
 
     #[test]
     fn sanity_checks() {
