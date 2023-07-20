@@ -1688,7 +1688,7 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
         // assert!(n > 1);
 
         let mut lookup_bits: Vec<Boolean> = vec![];
-        for i in ((n-m+1)..(n+1)).rev() {
+        for i in ((n+1-m)..(n+1)).rev() {
             lookup_bits.push(scalar[i].clone());
         }
         assert_eq!(lookup_bits.len(), m);
@@ -1699,51 +1699,37 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
             &lookup_vec,
             m
         )?;
-
-        // let twobase = lookup_vec[2].clone();
-        // let threebase = lookup_vec[3].clone();
-
             
-        let mut i: i32 = (n-m) as i32;
+        let mut i: i32 = n as i32 - m as i32 ;
         while i > 0 {
 
-            if i == (m as i32)-2 {
-                // output = Self::ed25519_point_doubling(
-                //     &mut cs.namespace(|| format!("first doubling in iteration {i}")),
-                //     &output,
-                // )?;
-                // output = Self::ed25519_point_doubling(
-                //     &mut cs.namespace(|| format!("second doubling in iteration {i}")),
-                //     &output,
-                // )?;
-                // let tmp = Self::conditionally_select2(
-                //     &mut cs.namespace(|| format!("allocate tmp value in iteration {i}")),
-                //     &identity_point,
-                //     &self,
-                //     &twobase.clone(),
-                //     &threebase.clone(),
-                //     &scalar[(i-1) as usize],
-                //     &scalar[i as usize]
-                // )?;
-                // output = Self::ed25519_point_addition(
-                //     &mut cs.namespace(|| format!("allocate sum of output and tmp in iteration {i}")),
-                //     &output,
-                //     &tmp,
-                // )?;
+            if i < (m as i32)-1 {
 
-                output = Self::ed25519_scalar_multiplication_m_bit(
-                    output, 
-                    &mut cs.namespace(|| format!("allocate output in iteration {i}")), 
-                    vec![scalar[(i-1) as usize].clone(), scalar[i as usize].clone()],
-                    m-1
+                for j in 0..(i+1) {
+                    output = Self::ed25519_point_doubling(
+                        &mut cs.namespace(|| format!("{j} doubling in iteration {i}")),
+                        &output,
+                    )?;
+                }
+
+                let mut lookup_bits: Vec<Boolean> = vec![];
+                for j in (0..(i+1)).rev() {
+                    lookup_bits.push(scalar[j as usize].clone());
+                }
+
+                let tmp = Self::conditionally_select_m(
+                    &mut cs.namespace(|| format!("allocate tmp value in iteration {i}")),
+                    &lookup_bits, 
+                    &lookup_vec[0..(1<<(i as usize +1))],
+                    i as usize +1,
                 )?;
 
-                // let output = Self::ed25519_scalar_multiplication_m_bit(
-                //     output, 
-                //     cs, 
-                //     scalar, 
-                //     m
-                // );
+                output = Self::ed25519_point_addition(
+                    &mut cs.namespace(|| format!("allocate sum of output and tmp in iteration {i}")),
+                    &output,
+                    &tmp,
+                )?;
+
                 break;
             }
 
@@ -1754,8 +1740,7 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
                 )?;
             }
             let mut lookup_bits: Vec<Boolean> = vec![];
-            println!("i is {}", i);
-            for j in ((i as usize - m + 1)..(i as usize + 1)).rev() {
+            for j in ((i as usize + 1 - m)..(i as usize + 1)).rev() {
                 lookup_bits.push(scalar[j as usize].clone());
             }
             assert_eq!(lookup_bits.len(), m);
@@ -2792,11 +2777,11 @@ mod tests {
         let mut rng = rand::thread_rng();
        
         let mut scalar = U256::random(&mut rng);
-        scalar = scalar >> 5; // scalar now has 253 significant bits
+        scalar = scalar >> 3; // scalar now has 253 significant bits
         let p = Ed25519Curve::scalar_multiplication(&b, &scalar);
        
         let mut scalar_vec: Vec<Boolean> = vec![];
-        for _i in 0..251 {
+        for _i in 0..253 {
             if bool::from(scalar.is_odd()) {
                 scalar_vec.push(Boolean::constant(true))
             } else {
@@ -2805,28 +2790,29 @@ mod tests {
             scalar = scalar >> 1;
         }
 
-        let mut cs = TestConstraintSystem::<Fp>::new();
+        for i in 3..7 {
+            let mut cs = TestConstraintSystem::<Fp>::new();
 
-        let b_alloc = AllocatedAffinePoint::alloc_affine_point(
-            &mut cs.namespace(|| "allocate base point"),
-            b,
-        );
-        assert!(b_alloc.is_ok());
-        let b_al = b_alloc.unwrap();
-
-        let p_alloc = b_al.ed25519_scalar_multiplication_m_bit(
-            &mut cs.namespace(|| "scalar multiplication"),
-            scalar_vec,
-            3
-        );
-        assert!(p_alloc.is_ok());
-        let p_al = p_alloc.unwrap();
-
-        assert_eq!(p, p_al.value);
-
-        assert!(cs.is_satisfied());
-        println!("Num constraints = {:?}", cs.num_constraints());
-        println!("Num inputs = {:?}", cs.num_inputs());
-
+            let b_alloc = AllocatedAffinePoint::alloc_affine_point(
+                &mut cs.namespace(|| "allocate base point"),
+                b,
+            );
+            assert!(b_alloc.is_ok());
+            let b_al = b_alloc.unwrap();
+    
+            let p_alloc = b_al.ed25519_scalar_multiplication_m_bit(
+                &mut cs.namespace(|| "scalar multiplication"),
+                scalar_vec.clone(),
+                i
+            );
+            assert!(p_alloc.is_ok());
+            let p_al = p_alloc.unwrap();
+    
+            assert_eq!(p, p_al.value);
+    
+            assert!(cs.is_satisfied());
+            println!("lookup {}, Num constraints = {:?}", i, cs.num_constraints());
+        }
+        
     }
 }
