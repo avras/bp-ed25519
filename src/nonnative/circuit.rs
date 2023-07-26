@@ -346,7 +346,8 @@ where
         )?;
 
         let c = F::from(19u64);
-        let ls_limb_value = if limbs123_maxed.get_value().unwrap() {
+        
+        let ls_limb_value = if limbs123_maxed.get_value().or_else(|| Some(false)).unwrap() {
             // Add 18 to the least significant limb. It may or may not overflow the 64 bits
             limbed_int.limbs[0] + c
         } else {
@@ -355,7 +356,7 @@ where
         
         let ls_limb_modified = cs.alloc(
             || "modified limb value",
-            || Ok(ls_limb_value)
+            || Ok(ls_limb_value),
         )?;
 
         // If all the most significant limbs are equal to their max values, then
@@ -881,7 +882,7 @@ where
 
         let res = Self::alloc_from_limbed_int(
             &mut cs.namespace(|| "conditional select result"),
-            if condition.get_value().unwrap() {
+            if condition.get_value().or_else(|| Some(true)).unwrap() {
                 a_value.clone()
             } else {
                 b_value.clone()
@@ -1164,7 +1165,7 @@ impl<F: PrimeField + PrimeFieldBits> AllocatedAffinePoint<F>  {
             &y_coords)
         ?;
 
-        let mut bits_value: Vec<bool> = bits.iter().map(|b| b.get_value().unwrap()).collect();
+        let mut bits_value: Vec<bool> = bits.iter().map(|b| b.get_value().or_else(|| Some(false)).unwrap()).collect();
         bits_value.reverse();
         let mut idx = 0;
         for (i,b) in bits_value.iter().enumerate() {
