@@ -1,4 +1,5 @@
 use std::ops::{Add, Sub, Mul, Rem};
+use bellperson::gadgets::num::AllocatedNum;
 use bellperson::{ConstraintSystem, SynthesisError, LinearCombination, Variable};
 use bellperson::gadgets::boolean::{AllocatedBit, Boolean};
 use ff::{PrimeField, PrimeFieldBits};
@@ -329,21 +330,44 @@ where
                 let bit = AllocatedBit::alloc(
                     cs.namespace(|| format!("check if limb {i} equals max value")),
                     Some(limbed_int.limbs[i] == max_limb_value),
+                ).unwrap();
+
+                let alloc_max_limb_value = AllocatedNum::alloc(
+                    cs.namespace(|| format!("alloc max limb value {i}")),
+                    || Ok(max_limb_value)
+                ).unwrap();
+                cs.enforce(|| format!("constraint bit {i}"), 
+                    |lc| lc + bit.get_variable(), 
+                    |lc| lc + &self.limbs[i] - alloc_max_limb_value.get_variable(),
+                    |lc| lc
                 );
-                bit.unwrap()
+                bit
             })
             .collect();
 
-        let limbs12_maxed = AllocatedBit::and(
-            cs.namespace(|| "limbs 1 and 2 are maximum possible values"),
-            &equality_bits[0],
-            &equality_bits[1],
+        // limbs 1 and 2
+        let limbs12_maxed = AllocatedBit::alloc(
+            &mut cs.namespace(|| "limbs 1 and 2 are maximum possible values"), 
+            Some(equality_bits[0].get_value().unwrap() & equality_bits[1].get_value().unwrap())
         )?;
-        let limbs123_maxed = AllocatedBit::and(
-            cs.namespace(|| "limbs 1, 2 and 3 are maximum possible values"),
-            &limbs12_maxed,
-            &equality_bits[2],
+        cs.enforce(
+            || "limbs12_maxed constraint",
+            |lc| lc + equality_bits[0].get_variable(),
+            |lc| lc + equality_bits[1].get_variable(),
+            |lc| lc + limbs12_maxed.get_variable(),
+        );
+
+        // limbs 1, 2 and 3
+        let limbs123_maxed = AllocatedBit::alloc(
+            &mut cs.namespace(|| "limbs 1, 2 and 3 are maximum possible values"), 
+            Some(limbs12_maxed.get_value().unwrap() & equality_bits[2].get_value().unwrap())
         )?;
+        cs.enforce(
+            || "limbs123_maxed constraint",
+            |lc| lc + limbs12_maxed.get_variable(),
+            |lc| lc + equality_bits[2].get_variable(),
+            |lc| lc + limbs123_maxed.get_variable(),
+        );
 
         let c = F::from(19u64);
         
