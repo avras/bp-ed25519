@@ -372,7 +372,9 @@ where
         let c = F::from(19u64);
         
         let ls_limb_value = if limbs123_maxed.get_value().or_else(|| Some(false)).unwrap() {
-            // Add 18 to the least significant limb. It may or may not overflow the 64 bits
+            // Add 19 to the least significant limb. It may or may not overflow the 64 bits
+            // 2^64 - 20 + 19 = 2^64 - 1. Fits in 64 bits
+            // 2^64 - 19 + 19 = 2^64. Does not fit in 64 bits
             limbed_int.limbs[0] + c
         } else {
             F::ZERO
