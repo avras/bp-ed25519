@@ -346,6 +346,7 @@ where
         Self::check_difference_is_zero(g_l, tq_l)
     }
 
+    #[allow(dead_code)]
     fn verify_ed25519_point_addition(
         p: &AffinePoint,
         q: &AffinePoint,
@@ -411,6 +412,7 @@ where
 }
 
 impl<F: PrimeField + PrimeFieldBits> LimbedAffinePoint<F> {
+    #[allow(dead_code)]
     fn verify_ed25519_point_addition(
         p: &Self,
         q: &Self,
