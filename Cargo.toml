@@ -1,7 +1,9 @@
 [package]
-name = "fe25519-r1cs"
+name = "bp-ed25519"
 version = "0.1.0"
+authors = ["Saravanan Vijayakumaran <sarva@ee.iitb.ac.in>", "Varun Thakore <varunt@ee.iitb.ac.in>"]
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 bellperson = { version = "0.25.0", default-features = false }
