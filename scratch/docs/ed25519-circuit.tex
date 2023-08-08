@@ -275,7 +275,7 @@ We note the following:
 We want to find an $r \in \mathbb{F}_q$ in reduced representation such that 
 \begin{align}
   g = tq+r
-  \label{eqn:g_equals_tq_plus_r}
+  \label{eqn:g_equals_tq_plus_r1}
 \end{align}
 for some quotient $t \in \mathbb{F}_q$. Here
 \begin{align*}
@@ -290,7 +290,7 @@ The prime $q$ will have four 64-bit limbs.
   q = q_0 + q_1 2^{64} + q_2 2^{128} + q_3 2^{192} \ \ \ \ \ \text{ where } q_i \in \{0,1,\ldots,2^{64}-1\}.
 \end{align*}
 
-The main challenge in checking (\ref{eqn:g_equals_tq_plus_r}) is the mismatch in the representations of the LHS and the RHS. On the LHS, $g$ has an unreduced representation with four limbs each occupying upto 206 bits.
+The main challenge in checking (\ref{eqn:g_equals_tq_plus_r1}) is the mismatch in the representations of the LHS and the RHS. On the LHS, $g$ has an unreduced representation with four limbs each occupying upto 206 bits.
 \begin{align*}
    g = h_0 + h_1 2^{64} + h_2 2^{128} + h_3 2^{192}.
 \end{align*}
@@ -299,7 +299,7 @@ On the RHS, $tq+r$ has an unreduced representation with six limbs each occupying
   tq+r  =&\ t_0q_0+r_0 + (t_0q_1 + t_1q_0 + r_1) 2^{64} + (t_0q_2 + t_1q_1 + t_2q_0 + r_2) 2^{128}\\
   & + (t_0q_3 + t_1q_2 + t_2q_1 + r_3) 2^{192}+ (t_1q_3 + t_2q_2) 2^{256} + t_2q_3 2^{320}.
 \end{align*}
-One way to check equality in (\ref{eqn:g_equals_tq_plus_r}) is to convert both $g$ and $tq+r$ to their reduced representations and check that these representations are equal. This would require range checks on the limbs of $g$ and $tq+r$. The number of boolean variables required for each range check will be equal to the bitwidth of the corresponding limb. Each boolean variable requires one constraint of the form $b(b-1) = 0$ in the R1CS system.
+One way to check equality in (\ref{eqn:g_equals_tq_plus_r1}) is to convert both $g$ and $tq+r$ to their reduced representations and check that these representations are equal. This would require range checks on the limbs of $g$ and $tq+r$. The number of boolean variables required for each range check will be equal to the bitwidth of the corresponding limb. Each boolean variable requires one constraint of the form $b(b-1) = 0$ in the R1CS system.
 
 We could reduce the number of range checks by checking that $g-tq-r$ equals zero. This is the approach used in \texttt{circom-ecdsa}. Consider the following argument assuming that $g-tq-r = 0$.
 \begin{enumerate}
